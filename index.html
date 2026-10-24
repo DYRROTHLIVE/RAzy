@@ -1,0 +1,2465 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
+    <meta
+      name="description"
+      content="RAzy — Universal Game Launcher, UI/UX, Authentication & Landscape Game System with player profile, unique UIDs, game library, match preparation, and 3D arcade gameplay."
+    />
+    <meta property="og:title" content="RAzy — Universal Game Launcher" />
+    <meta property="og:description" content="RAzy — Universal Game Launcher, UI/UX, Authentication & Landscape Game System with player profile, unique UIDs, game library, match preparation, and 3D arcade gameplay." />
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#000000" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="RAzy" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <script>
+      (function () {
+        if ('serviceWorker' in navigator) {
+          window.addEventListener('load', () => {
+            navigator.serviceWorker.register('/sw.js').catch(() => {});
+          });
+        }
+        const params = new URLSearchParams(window.location.search);
+        if (params.has("play") || params.has("state")) {
+          document.documentElement.classList.add("autoplay-mode");
+        }
+        const stateParam = (params.get("state") || "").toLowerCase();
+        if (stateParam) {
+          document.documentElement.setAttribute("data-url-state", stateParam);
+        }
+      })();
+    </script>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div id="root" class="hidden" aria-hidden="true"></div>
+    <div id="canvas-container" aria-label="RAzy 3D Tennis Stadium Viewport">
+      <canvas id="game-canvas"></canvas>
+    </div>
+    <div id="hud-root">
+      <header id="top-hud-bar">
+        <div
+          id="games-pill-player"
+          class="wii-games-pill"
+          title="Player Games Won"
+        >
+          <span class="game-bubble" data-slot="0"></span
+          ><span class="game-bubble" data-slot="1"></span
+          ><span class="game-bubble extra-slot hidden" data-slot="2"></span>
+        </div>
+        <div id="scoreboard-pill" class="wii-scoreboard-pill">
+          <div class="mii-side mii-side-player">
+            <div class="mii-avatar-badge player-tint">
+              <canvas id="mii-icon-player" width="192" height="192"></canvas>
+            </div>
+            <div class="mii-avatar-badge player-tint secondary-mii">
+              <canvas id="mii-icon-player-2" width="192" height="192"></canvas>
+            </div>
+          </div>
+          <div id="score-center-display" class="score-center-display">
+            <span id="score-player-text" class="score-digits">00</span
+            ><span id="score-separator" class="score-dash">-</span
+            ><span id="score-opponent-text" class="score-digits">00</span>
+          </div>
+          <div class="mii-side mii-side-opponent">
+            <div class="mii-avatar-badge opponent-tint secondary-mii">
+              <canvas
+                id="mii-icon-opponent-2"
+                width="192"
+                height="192"
+              ></canvas>
+            </div>
+            <div class="mii-avatar-badge opponent-tint">
+              <canvas id="mii-icon-opponent" width="192" height="192"></canvas>
+            </div>
+          </div>
+        </div>
+        <div class="top-hud-actions">
+          <div id="hud-level-badge" class="hud-level-badge hidden" title="Current Level / Chapter">
+            <span>🔥</span><span id="hud-level-badge-text">LVL 1</span>
+          </div>
+          <button
+            id="btn-return-lobby"
+            class="hud-mini-btn lobby-btn"
+            type="button"
+            title="Return to Game Lobby"
+          >
+            <span>🏠</span><span>Lobby</span>
+          </button>
+          <button
+            id="btn-top-fullscreen"
+            class="hud-mini-btn top-fs-btn"
+            type="button"
+            title="Full Screen Landscape (F)"
+          >
+            <span class="fs-icon">⛶</span><span>Landscape</span>
+          </button>
+          <div
+            id="games-pill-opponent"
+            class="wii-games-pill"
+            title="Opponent Games Won"
+          >
+            <span class="game-bubble" data-slot="0"></span
+            ><span class="game-bubble" data-slot="1"></span
+            ><span class="game-bubble extra-slot hidden" data-slot="2"></span>
+          </div>
+        </div>
+      </header>
+      <div
+        id="opponent-presence-pill"
+        class="opponent-presence-pill hidden"
+        aria-live="polite"
+      >
+        <span id="opponent-presence-dot" class="presence-dot"></span
+        ><span id="opponent-presence-text">Waiting for Player 2…</span>
+      </div>
+      <div id="world-labels-layer">
+        <div id="server-tag" class="wii-server-tag hidden">
+          <span class="server-tag-text">Server</span>
+        </div>
+        <div
+          id="player-nameplate"
+          class="wii-court-nameplate player-plate hidden"
+        >
+          <canvas id="plate-mii-player" width="192" height="192"></canvas>
+          <div class="plate-info">
+            <div class="plate-name">Ammaar</div>
+            <div class="plate-skill">Skill Level 1050</div>
+          </div>
+        </div>
+        <div id="timing-popup" class="wii-timing-popup hidden">
+          <span id="timing-popup-grade" class="timing-grade">PERFECT</span
+          ><span id="timing-popup-detail" class="timing-detail"
+            >POWER TOPSPIN • 178 KM/H</span
+          >
+        </div>
+        <!-- Real-Time Speech Bubbles for Emotes Over Players -->
+        <div id="player-speech-bubble" class="mii-court-speech-bubble player-bubble hidden">
+          <div class="bubble-inner">
+            <span class="bubble-icon" id="psb-icon">🔥</span>
+            <span class="bubble-text" id="psb-text">Let's Go!</span>
+          </div>
+          <div class="bubble-tail"></div>
+        </div>
+        <div id="opponent-speech-bubble" class="mii-court-speech-bubble opponent-bubble hidden">
+          <div class="bubble-inner">
+            <span class="bubble-icon" id="osb-icon">👏</span>
+            <span class="bubble-text" id="osb-text">Nice Shot!</span>
+          </div>
+          <div class="bubble-tail"></div>
+        </div>
+      </div>
+      <div id="center-banner-layer" class="center-banner-layer hidden">
+        <div id="center-banner-streak" class="center-banner-streak"></div>
+        <div id="center-banner-text" class="center-banner-text style-gold">
+          Game Point
+        </div>
+        <div id="center-banner-sub" class="center-banner-sub hidden"></div>
+      </div>
+      <div id="replay-badge" class="wii-replay-badge hidden">
+        <span class="replay-dots"
+          ><i class="dot dot-1"></i><i class="dot dot-2"></i
+          ><i class="dot dot-3"></i></span
+        ><span class="replay-label">Replay</span>
+      </div>
+      <!-- Virtual Joystick (Left Hand / Thumb) -->
+      <div id="virtual-joystick-container" class="virtual-joystick-container">
+        <div id="virtual-joystick-base" class="virtual-joystick-base">
+          <div class="joystick-ring-glow"></div>
+          <div class="joystick-compass-lines">
+            <span class="compass-dir compass-up">▲</span
+            ><span class="compass-dir compass-left">◄</span
+            ><span class="compass-dir compass-center">●</span
+            ><span class="compass-dir compass-right">►</span
+            ><span class="compass-dir compass-down">▼</span>
+          </div>
+          <div id="virtual-joystick-stick" class="virtual-joystick-stick">
+            <div class="stick-grip-ring"></div>
+          </div>
+        </div>
+        <div class="joystick-caption">RUN / STEER</div>
+      </div>
+      <!-- Action Buttons Cluster (Right Hand / Thumb) -->
+      <div id="arcade-actions-cluster" class="arcade-actions-cluster">
+        <button
+          id="btn-action-fire"
+          class="arcade-action-btn fire-power-btn"
+          type="button"
+          title="Super Fire Shot / Power Smash (K / F)"
+        >
+          <span class="btn-fire-glow"></span
+          ><span class="arcade-btn-icon">🔥</span
+          ><span class="arcade-btn-title">FIRE</span
+          ><span class="arcade-btn-sub">POWER</span></button
+        ><button
+          id="btn-action-jump"
+          class="arcade-action-btn jump-action-btn"
+          type="button"
+          title="Jump / Aerial Spike (Space / J / L)"
+        >
+          <span class="arcade-btn-icon">🦘</span
+          ><span class="arcade-btn-title">JUMP</span
+          ><span class="arcade-btn-sub">SPIKE</span></button
+        ><button
+          id="btn-action-swing"
+          class="arcade-action-btn swing-action-btn"
+          type="button"
+          title="Swing / Serve Toss (Space / Enter)"
+        >
+          <span class="arcade-btn-icon">🎾</span
+          ><span class="arcade-btn-title">SWING</span
+          ><span class="arcade-btn-sub">HIT</span></button
+        ><button
+          id="btn-action-slice"
+          class="arcade-action-btn slice-action-btn"
+          type="button"
+          title="Slice / Lob (Shift / X)"
+        >
+          <span class="arcade-btn-icon">💫</span
+          ><span class="arcade-btn-title">SLICE</span
+          ><span class="arcade-btn-sub">SPIN</span>
+        </button>
+      </div>
+
+      <!-- Real-Time Match Emote Wheel (Radial Selector on Rally End or on Demand) -->
+      <div id="match-emote-wheel-container" class="match-emote-wheel-container hidden">
+        <div class="emote-wheel-backdrop" id="emote-wheel-backdrop"></div>
+        <div class="emote-wheel-disc">
+          <div class="emote-wheel-center-hub">
+            <span class="hub-label">EMOTE</span>
+            <small class="hub-sub">Rally Reaction</small>
+          </div>
+          <!-- 6 Radial Emote Sectors -->
+          <button type="button" class="emote-wheel-sector sector-1" data-emote="joy" title="Joy &amp; Laugh (Haha!)">
+            <span class="emote-icon">😄</span>
+            <span class="emote-name">Haha!</span>
+          </button>
+          <button type="button" class="emote-wheel-sector sector-2" data-emote="fire" title="Fire Roar &amp; Flex (Let's Go!)">
+            <span class="emote-icon">🔥</span>
+            <span class="emote-name">Let's Go!</span>
+          </button>
+          <button type="button" class="emote-wheel-sector sector-3" data-emote="nice" title="Applause &amp; Respect (Nice Shot!)">
+            <span class="emote-icon">👏</span>
+            <span class="emote-name">Nice Shot!</span>
+          </button>
+          <button type="button" class="emote-wheel-sector sector-4" data-emote="shock" title="Shock &amp; Disbelief (No Way!)">
+            <span class="emote-icon">😱</span>
+            <span class="emote-name">No Way!</span>
+          </button>
+          <button type="button" class="emote-wheel-sector sector-5" data-emote="defeat" title="Facepalm &amp; Droop (Oof!)">
+            <span class="emote-icon">💀</span>
+            <span class="emote-name">Oof!</span>
+          </button>
+          <button type="button" class="emote-wheel-sector sector-6" data-emote="focus" title="Focused &amp; Ice Cold (Locked In!)">
+            <span class="emote-icon">🎯</span>
+            <span class="emote-name">Locked In!</span>
+          </button>
+        </div>
+        <button type="button" id="btn-close-emote-wheel" class="emote-wheel-close-btn">✕ Close</button>
+      </div>
+
+      <!-- Top Sub Bar (Over distant background sky & bleachers, completely off the court) -->
+      <div id="top-sub-bar" class="top-sub-bar">
+        <div id="bottom-left-dock" class="top-toolbar-left dock-pill-row">
+          <button
+            id="btn-audio-toggle"
+            class="hud-mini-btn"
+            type="button"
+            title="Toggle Lyria 3 Soundtrack & SFX"
+          >
+            <span class="btn-dot music-on" id="audio-status-dot"></span
+            ><span id="audio-track-label">Lyria</span></button
+          ><button
+            id="btn-camera-cycle"
+            class="hud-mini-btn"
+            type="button"
+            title="Cycle Camera Angle (C)"
+          >
+            <span>Cam:</span><strong id="camera-mode-label">Rally</strong></button
+          ><button
+            id="btn-replay-trigger"
+            class="hud-mini-btn"
+            type="button"
+            title="Toggle Instant Replay (R)"
+          >
+            <span>Replay</span></button
+          ><button
+            id="btn-hud-emote-toggle"
+            class="hud-mini-btn emote-hud-btn"
+            type="button"
+            title="Open Real-Time Mii Emote Wheel (E)"
+          >
+            <span>💬</span><span>Emote</span></button
+          ><button
+            id="btn-controls-toggle"
+            class="hud-mini-btn"
+            type="button"
+            title="Toggle Touch Controls (H)"
+          >
+            <span>🕹️</span><span id="controls-toggle-label">Controls</span></button
+          ><button
+            id="btn-fullscreen-toggle"
+            class="hud-mini-btn"
+            type="button"
+            title="Toggle Full Screen Landscape (F)"
+          >
+            <span class="fs-icon">⛶</span><span id="fullscreen-btn-text">Full</span></button
+          ><button
+            id="btn-webcam-toggle"
+            class="hud-mini-btn motion-btn"
+            type="button"
+          >
+            <span class="btn-dot" id="webcam-status-dot"></span
+            ><span>Motion</span></button
+          ><button
+            id="btn-phone-racket"
+            class="hud-mini-btn motion-btn hidden"
+            type="button"
+          >
+            <span class="btn-dot" id="phone-status-dot"></span
+            ><span id="phone-status-label">Racket</span></button
+          ><button
+            id="btn-multiplayer-modal"
+            class="hud-mini-btn hidden"
+            type="button"
+            title="Open 1v1 Multiplayer"
+          >
+            <span>💬 1v1</span>
+          </button>
+        </div>
+        <div id="bottom-right-dock" class="top-gauge-right">
+          <div id="timing-gauge-card" class="timing-gauge-card">
+            <div class="gauge-header">
+              <span id="gauge-mode-title">TIMING</span
+              ><span id="gauge-speed-readout">READY</span>
+            </div>
+            <div class="timing-bar-track">
+              <div class="timing-zone zone-early">EARLY</div>
+              <div class="timing-zone zone-sweet">SWEET</div>
+              <div class="timing-zone zone-late">LATE</div>
+              <div
+                id="timing-cursor"
+                class="timing-cursor"
+                style="left: 50%"
+              ></div>
+            </div>
+          </div>
+          <div id="webcam-pip-card" class="webcam-pip-card hidden">
+            <video id="webcam-video" autoplay playsinline muted></video
+            ><canvas id="webcam-canvas" width="160" height="120"></canvas>
+            <div class="pip-badge">
+              <span class="pip-live-dot"></span
+              ><span id="pip-motion-label">Webcam</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- Landscape helper notice -->
+    <div
+      id="landscape-orientation-notice"
+      class="landscape-orientation-notice hidden"
+    >
+      <div class="notice-card">
+        <span class="notice-icon">📱 ➔ 🖥️</span>
+        <div class="notice-title">Landscape Mode Recommended</div>
+        <div class="notice-text">
+          Rotate device to Landscape or tap Fullscreen for full stadium view
+          &amp; dual-thumb arcade controls!
+        </div>
+        <div class="notice-btns">
+          <button
+            id="btn-notice-fullscreen"
+            class="wii-ok-btn notice-btn"
+            type="button"
+          >
+            ⛶ Play Fullscreen</button
+          ><button
+            id="btn-notice-dismiss"
+            class="notice-dismiss-btn"
+            type="button"
+          >
+            Dismiss
+          </button>
+        </div>
+      </div>
+    </div>
+    <div id="title-modal" class="wii-modal-backdrop">
+      <div class="wii-title-card">
+        <div class="wii-logo-header">
+          <h1 class="argon-logo-title">
+            <span class="logo-word-argon">Argon</span
+            ><span class="logo-word-tennis">Tennis</span>
+          </h1>
+        </div>
+        <div class="court-preview-diagram">
+          <div class="mini-court-turf">
+            <div class="mini-court-lines">
+              <div class="mini-net-line"></div>
+              <div class="mini-service-box top"></div>
+              <div class="mini-service-box bottom"></div>
+            </div>
+            <div class="court-slot-marker opponent-marker">
+              <canvas id="setup-mii-opponent" width="192" height="192"></canvas>
+              <div id="setup-opponent-label" class="slot-tag cpu-tag">
+                Club AI
+              </div>
+            </div>
+            <div class="court-slot-marker player-marker">
+              <canvas id="setup-mii-player" width="192" height="192"></canvas>
+              <div class="slot-tag you-tag">You</div>
+            </div>
+          </div>
+        </div>
+        <div class="setup-section">
+          <div class="wii-green-btn-row" id="difficulty-mode-group">
+            <button
+              type="button"
+              class="wii-green-choice selected"
+              data-difficulty="casual"
+            >
+              <span class="choice-main">Casual AI</span></button
+            ><button
+              type="button"
+              class="wii-green-choice"
+              data-difficulty="pro"
+            >
+              <span class="choice-main">Pro AI</span></button
+            ><button
+              type="button"
+              class="wii-green-choice"
+              data-difficulty="1v1"
+            >
+              <span class="choice-main">1v1 Match</span>
+            </button>
+          </div>
+        </div>
+        <div class="setup-section" id="match-length-section">
+          <div class="wii-green-btn-row" id="match-length-group">
+            <button type="button" class="wii-green-choice" data-games="1">
+              <span class="choice-main">1 Game</span></button
+            ><button
+              type="button"
+              class="wii-green-choice selected"
+              data-games="3"
+            >
+              <span class="choice-main">Best of 3</span></button
+            ><button type="button" class="wii-green-choice" data-games="5">
+              <span class="choice-main">Best of 5</span>
+            </button>
+          </div>
+        </div>
+        <div class="wii-modal-actions">
+          <button id="btn-start-match" type="button" class="wii-ok-btn">
+            <span class="hand-cursor-icon">🎾</span><span>Start Match</span>
+          </button>
+        </div>
+      </div>
+    </div>
+    <div id="companion-modal" class="wii-modal-backdrop hidden">
+      <div class="wii-dialog-box wii-companion-clean-dialog">
+        <div class="mp-dialog-header">
+          <h2 class="dialog-title">📱 Phone Controller</h2>
+          <span id="mp-active-status" class="mp-conn-tag">Scan QR</span>
+        </div>
+        <p class="dialog-desc">Scan with your phone camera</p>
+        <div id="mp-card-p1" class="mp-clean-qr-wrap">
+          <span id="mp-p1-status" class="hidden"></span
+          ><img
+            id="companion-qr"
+            src="https://www.gstatic.com/aistudio/starter-apps/tennis/qr/player1_qr.png"
+            alt="Phone Controller QR"
+            width="200"
+            height="200"
+            class="mp-qr-img"
+          /><a
+            id="companion-link"
+            href="/companion.html?room=default&role=p1"
+            target="_blank"
+            rel="noopener"
+            class="mp-subtle-link"
+            >Open controller link ↗</a
+          >
+        </div>
+        <div id="mp-card-p2" class="mp-clean-qr-wrap hidden">
+          <span id="mp-p2-status" class="hidden"></span
+          ><img
+            id="companion-qr-p2"
+            src="https://www.gstatic.com/aistudio/starter-apps/tennis/qr/player2_qr.png"
+            alt="Phone Controller QR"
+            width="200"
+            height="200"
+            class="mp-qr-img"
+          /><a
+            id="companion-link-p2"
+            href="/companion.html?room=default&role=p2"
+            target="_blank"
+            rel="noopener"
+            class="mp-subtle-link"
+            >Open controller link ↗</a
+          >
+        </div>
+        <div class="dialog-actions">
+          <button id="btn-close-companion" type="button" class="wii-pill-btn">
+            Back to Court
+          </button>
+        </div>
+      </div>
+    </div>
+    <div id="victory-modal" class="wii-modal-backdrop hidden">
+      <div class="wii-skill-card">
+        <div class="skill-card-header">Club Skill Rating</div>
+        <div class="skill-card-body">
+          <div class="skill-chart-frame">
+            <canvas id="skill-graph-canvas" width="280" height="200"></canvas>
+          </div>
+          <div class="skill-mii-summary">
+            <div id="victory-result-banner" class="victory-result-banner">
+              YOU WIN!
+            </div>
+            <div class="skill-score-pill">
+              <canvas id="victory-mii-icon" width="192" height="192"></canvas>
+              <div class="skill-score-meta">
+                <div class="skill-rating-number" id="skill-rating-value">
+                  1120
+                </div>
+                <div class="skill-player-name">Ammaar (+120)</div>
+              </div>
+            </div>
+            <div id="victory-match-score" class="victory-match-score">
+              Final Games: 2 - 0
+            </div>
+          </div>
+        </div>
+        <div id="victory-level-cleared-banner" class="victory-level-cleared-banner hidden">
+          <span class="level-cleared-title">🏆 LEVEL CLEARED!</span>
+          <div class="level-cleared-stars" id="victory-level-stars">⭐⭐⭐</div>
+        </div>
+        <div class="skill-card-footer">
+          <button
+            id="btn-victory-next-level"
+            type="button"
+            class="wii-footer-btn next-level-btn hidden"
+          >
+            Next Level ➔</button
+          ><button
+            id="btn-play-again"
+            type="button"
+            class="wii-footer-btn primary"
+          >
+            Play again</button
+          ><button
+            id="btn-return-title"
+            type="button"
+            class="wii-footer-btn secondary"
+          >
+            Lobby
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 1. STRICT LANDSCAPE ENFORCEMENT SHIELD -->
+    <div id="landscape-enforcer-shield" class="landscape-enforcer-shield hidden" aria-live="assertive">
+      <div class="shield-card">
+        <div class="shield-device-anim">
+          <div class="anim-phone">
+            <div class="phone-screen-glow">🎾</div>
+          </div>
+          <div class="anim-arrow">↻</div>
+        </div>
+        <h2 class="shield-title">ROTATE TO LANDSCAPE</h2>
+        <p class="shield-subtitle">RAzy requires full landscape stadium view</p>
+        <p class="shield-text">
+          Portrait mode (9:16) is not supported. Please rotate your device or tap below to lock into landscape arcade action!
+        </p>
+        <button id="btn-force-landscape" class="wii-ok-btn shield-btn" type="button">
+          ⛶ Lock Fullscreen Landscape
+        </button>
+      </div>
+    </div>
+
+    <!-- =====================================================================
+         STAGE 1 — RAzy BRAND SPLASH SCREEN (Black background, centered logo)
+         ===================================================================== -->
+    <div id="brand-splash-screen" class="brand-splash-screen">
+      <div class="splash-logo-wrapper">
+        <img
+          src="./assets/aistudio/file_0000000066a08208adac36f1529157e0_1ffb8781.png"
+          alt="RAzy"
+          class="razy-brand-logo-img"
+        />
+        <div class="razy-logo-reveal-glow"></div>
+      </div>
+    </div>
+
+    <!-- =====================================================================
+         STAGE 2 — RAzy PREMIUM LOADING SCREEN
+         ===================================================================== -->
+    <div id="loading-screen" class="razy-loading-screen hidden">
+      <div class="loading-content-box">
+        <div class="loading-logo-wrap">
+          <img
+            src="./assets/aistudio/file_0000000066a08208adac36f1529157e0_1ffb8781.png"
+            alt="RAzy"
+            class="razy-loading-logo"
+          />
+        </div>
+        <div class="loading-indicator-frame">
+          <div class="loading-bar-track">
+            <div id="loading-bar-fill" class="loading-bar-fill" style="width: 25%"></div>
+          </div>
+          <div class="loading-meta-row">
+            <span id="loading-status-text" class="loading-status-text">Initializing RAzy Core Systems…</span>
+            <span id="loading-pct-text" class="loading-pct-text">25%</span>
+          </div>
+        </div>
+        <button id="btn-loading-retry" type="button" class="loading-retry-btn hidden">
+          ↻ Retry Connection
+        </button>
+      </div>
+    </div>
+
+    <!-- =====================================================================
+         STAGE 4 — LOGIN & REGISTRATION SCREEN (Google Auth)
+         ===================================================================== -->
+    <div id="auth-screen" class="razy-auth-screen hidden">
+      <div class="auth-cinematic-backdrop"></div>
+      <div class="auth-panel-card">
+        <div class="auth-brand-masthead">
+          <img
+            src="./assets/aistudio/file_0000000066a08208adac36f1529157e0_1ffb8781.png"
+            alt="RAzy"
+            class="razy-auth-logo"
+          />
+          <h2 class="auth-welcome-title">WELCOME TO RAZY</h2>
+          <p class="auth-welcome-sub">Your next game starts here.</p>
+        </div>
+
+        <div id="auth-status-toast" class="auth-status-toast hidden"></div>
+
+        <div class="auth-actions-stack">
+          <!-- Primary: Continue with Google -->
+          <button id="btn-google-login" type="button" class="auth-google-primary-btn">
+            <svg class="google-svg-icon" viewBox="0 0 24 24" width="22" height="22">
+              <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"/>
+              <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.33 24 12 24z"/>
+              <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 9.99 0 12s.45 3.82 1.25 5.42l4.03-3.15z"/>
+              <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"/>
+            </svg>
+            <span>Continue with Google</span>
+          </button>
+
+          <div class="auth-or-divider">
+            <span>OR INSTANT ACCESS</span>
+          </div>
+
+          <!-- Secondary: Quick Guest / Offline Trial -->
+          <button id="btn-guest-login" type="button" class="auth-guest-secondary-btn">
+            <span>⚡ Instant Play as Guest</span>
+          </button>
+        </div>
+
+        <div class="auth-legal-footer">
+          <button type="button" id="link-privacy-policy" class="legal-text-btn">Privacy Policy</button>
+          <span class="legal-sep">·</span>
+          <button type="button" id="link-terms-service" class="legal-text-btn">Terms of Service</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- =====================================================================
+         STAGE 5 — PLAYER PROFILE & UNIQUE USERNAME CREATION
+         ===================================================================== -->
+    <div id="profile-create-screen" class="razy-profile-create-screen hidden">
+      <div class="profile-create-card">
+        <div class="profile-create-header">
+          <span class="p-create-badge">PLAYER REGISTRATION</span>
+          <h2 class="p-create-title">CREATE YOUR PLAYER ID</h2>
+          <p class="p-create-desc">Choose a unique gamer username. Your permanent collision-resistant UID will be generated.</p>
+        </div>
+
+        <!-- Avatar & Google Identity Preview -->
+        <div class="p-identity-preview-row">
+          <div class="p-avatar-ring">
+            <canvas id="p-create-avatar-canvas" width="80" height="80"></canvas>
+          </div>
+          <div class="p-google-meta">
+            <span class="p-google-label">AUTHENTICATED GOOGLE ACCOUNT:</span>
+            <strong id="p-create-google-email" class="p-google-email">playixkid@gmail.com</strong>
+            <span class="p-google-status">✓ Identity Verified</span>
+          </div>
+        </div>
+
+        <!-- Unique Username Input Section -->
+        <div class="p-username-field-group">
+          <div class="p-label-row">
+            <label for="input-profile-username">Choose Unique Username (3–16 chars):</label>
+            <button id="btn-suggest-username" type="button" class="suggest-name-btn">🎲 Random Suggestion</button>
+          </div>
+          <div class="p-input-wrap">
+            <span class="p-input-prefix">@</span>
+            <input
+              id="input-profile-username"
+              type="text"
+              maxlength="16"
+              placeholder="e.g. ShadowStriker"
+              autocomplete="off"
+            />
+            <div id="username-availability-badge" class="availability-badge idle">
+              <span class="status-dot"></span>
+              <span class="status-msg">Enter username</span>
+            </div>
+          </div>
+          <div id="username-suggestions-box" class="suggestions-chips-row hidden">
+            <!-- Dynamic suggestion pills injected here -->
+          </div>
+        </div>
+
+        <!-- Permanent UID Generation Preview -->
+        <div class="p-uid-preview-box">
+          <span class="p-uid-label">PERMANENT PLAYER UID (AUTHORITATIVE):</span>
+          <strong id="profile-create-uid-preview" class="p-uid-val">RAZ-7F3A91C2</strong>
+          <small class="p-uid-note">🔒 Collision-resistant server ID. Never recycled or re-used.</small>
+        </div>
+
+        <div class="p-create-actions">
+          <button id="btn-submit-create-profile" type="button" class="create-account-btn" disabled>
+            <span>CREATE ACCOUNT &amp; ENTER LOBBY ➔</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 5. GAME LOBBY SCREEN (FUTURISTIC COMMAND DECK MATCHING IMAGES) -->
+    <div id="game-lobby-screen" class="game-lobby-screen hidden">
+      <div class="lobby-sci-fi-viewport">
+        <!-- Top Command Bar -->
+        <header class="cmd-top-bar">
+          <!-- Left: User Profile Pill -->
+          <div id="cmd-profile-pill" class="cmd-profile-card" title="Open Player Profile">
+            <div class="cmd-avatar-frame">
+              <canvas id="lobby-player-avatar" width="96" height="96"></canvas>
+              <div class="cmd-avatar-rank-glow" id="cmd-avatar-rank-glow"></div>
+            </div>
+            <div class="cmd-profile-info">
+              <div class="cmd-name-row">
+                <span id="lobby-player-name" class="cmd-name">Ammaar</span>
+                <span id="lobby-vip-tag" class="cmd-vip-badge">VIP 3</span>
+              </div>
+              <div class="cmd-lvl-exp-row">
+                <span id="lobby-player-lvl" class="cmd-lvl-tag">LV.42</span>
+                <div class="cmd-exp-track">
+                  <div id="lobby-player-exp-bar" class="cmd-exp-fill" style="width: 74%"></div>
+                </div>
+                <span id="lobby-exp-text" class="cmd-exp-digits">74%</span>
+              </div>
+              <div class="cmd-power-score">
+                <span>⚔️ POWER</span> <strong id="lobby-combat-power">4,820</strong>
+              </div>
+            </div>
+          </div>
+
+          <!-- Center-Right: Resources & Rank Hub -->
+          <div class="cmd-resources-hub">
+            <!-- Gold Coins -->
+            <div class="cmd-resource-chip gold-chip" id="chip-gold" title="Gold Coins">
+              <span class="res-icon">🪙</span>
+              <span id="lobby-gold-count" class="res-val">500,732</span>
+              <button type="button" class="res-plus-btn">+</button>
+            </div>
+            <!-- Diamonds / Gems -->
+            <div class="cmd-resource-chip gem-chip" id="chip-gems" title="Gems">
+              <span class="res-icon">💎</span>
+              <span id="lobby-gems-count" class="res-val">6,000</span>
+              <button type="button" class="res-plus-btn">+</button>
+            </div>
+            <!-- Energy / Stamina -->
+            <div class="cmd-resource-chip energy-chip" id="chip-energy" title="Match Stamina">
+              <span class="res-icon">⚡</span>
+              <span id="lobby-energy-count" class="res-val">120/120</span>
+              <button type="button" class="res-plus-btn">+</button>
+            </div>
+            <!-- Rank Badge Pill -->
+            <div id="cmd-rank-pill" class="cmd-rank-pill" title="Competitive Tennis Rank">
+              <span id="lobby-rank-badge-icon" class="rank-medal-icon">🥇</span>
+              <div class="rank-meta-col">
+                <span id="lobby-rank-name" class="rank-tier-name">Gold II</span>
+                <span id="lobby-rank-rp" class="rank-rp-text">1,680 RP</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Far Right: Utility Buttons (Friends, Messages, Notifications, Settings, APK) -->
+          <div class="cmd-sys-actions">
+            <span class="cmd-ping-badge" title="Server Latency">📶 24ms</span>
+            <button id="btn-top-install-apk" type="button" class="cmd-icon-btn install-apk-btn" title="Install RAzy Android APK / App">
+              <span>📦</span>
+            </button>
+            <button id="btn-util-friends" type="button" class="cmd-icon-btn" title="Friends &amp; Rivals">
+              <span>👥</span>
+            </button>
+            <button id="btn-util-messages" type="button" class="cmd-icon-btn mail-btn" title="Messages &amp; Inbox">
+              <span>✉️</span>
+              <span class="mail-unread-dot"></span>
+            </button>
+            <button id="btn-util-notifications" type="button" class="cmd-icon-btn" title="System Notifications">
+              <span>🔔</span>
+              <span class="notif-dot"></span>
+            </button>
+            <button id="btn-util-settings" type="button" class="cmd-icon-btn" title="Universal Game &amp; Platform Settings">
+              <span>⚙️</span>
+            </button>
+            <button id="btn-top-audio" type="button" class="cmd-icon-btn" title="Toggle Soundtrack">
+              <span>🎵</span>
+            </button>
+            <button id="btn-lobby-logout" type="button" class="cmd-icon-btn" title="Switch User / Account">
+              <span>🔄</span>
+            </button>
+          </div>
+        </header>
+
+        <!-- Main Middle Area: Left Navigation Panel + Panoramic Command Deck -->
+        <div class="lobby-main-middle-row">
+          <!-- 10-Item Left Navigation Panel -->
+          <nav class="lobby-left-navbar" aria-label="Main Navigation">
+            <button id="nav-btn-home" type="button" class="nav-item-btn active" title="Lobby Home">
+              <span class="nav-icon">🏠</span>
+              <span class="nav-text">Home</span>
+            </button>
+            <button id="nav-btn-character" type="button" class="nav-item-btn" title="Character Wardrobe &amp; Traits">
+              <span class="nav-icon">👤</span>
+              <span class="nav-text">Character</span>
+            </button>
+            <button id="nav-btn-weapons" type="button" class="nav-item-btn" title="Weapons &amp; Rackets Armory">
+              <span class="nav-icon">⚔️</span>
+              <span class="nav-text">Weapons</span>
+            </button>
+            <button id="nav-btn-inventory" type="button" class="nav-item-btn" title="Inventory &amp; Gear">
+              <span class="nav-icon">🎒</span>
+              <span class="nav-text">Inventory</span>
+            </button>
+            <button id="nav-btn-store" type="button" class="nav-item-btn" title="Pro Equipment Shop">
+              <span class="nav-icon">🛒</span>
+              <span class="nav-text">Store</span>
+            </button>
+            <button id="nav-btn-events" type="button" class="nav-item-btn" title="Active Events &amp; Season Pass">
+              <span class="nav-icon">🎟️</span>
+              <span class="nav-text">Events</span>
+            </button>
+            <button id="nav-btn-missions" type="button" class="nav-item-btn" title="Daily Tasks &amp; Missions">
+              <span class="nav-icon">🎯</span>
+              <span class="nav-text">Missions</span>
+            </button>
+            <button id="nav-btn-clan" type="button" class="nav-item-btn" title="Smash Club Clan Hub">
+              <span class="nav-icon">🛡️</span>
+              <span class="nav-text">Clan</span>
+            </button>
+            <button id="nav-btn-rank" type="button" class="nav-item-btn" title="Competitive Leaderboard &amp; Ranks">
+              <span class="nav-icon">👑</span>
+              <span class="nav-text">Rank</span>
+            </button>
+            <button id="nav-btn-settings" type="button" class="nav-item-btn" title="Universal Settings">
+              <span class="nav-icon">⚙️</span>
+              <span class="nav-text">Settings</span>
+            </button>
+          </nav>
+
+        <!-- Main Panoramic Command Deck -->
+        <div class="cmd-deck-stage">
+          <!-- 1. Left Floating Modules Cluster (Hexagonal Buttons + Holographic Shop) -->
+          <div class="cmd-left-col">
+            <div class="hex-buttons-column">
+              <button id="btn-hex-mail" type="button" class="cmd-hex-btn hex-mail" title="Mailbox & Gifts">
+                <div class="hex-inner">
+                  <span class="hex-icon">✉️</span>
+                  <span class="hex-label">Mail</span>
+                  <span class="hex-alert-badge">3</span>
+                </div>
+              </button>
+              <button id="btn-hex-quests" type="button" class="cmd-hex-btn hex-quests" title="Daily Tasks & Quests">
+                <div class="hex-inner">
+                  <span class="hex-icon">📋</span>
+                  <span class="hex-label">Quests</span>
+                  <span class="hex-alert-badge">!</span>
+                </div>
+              </button>
+              <button id="btn-hex-checkin" type="button" class="cmd-hex-btn hex-checkin" title="7-Day Login Rewards">
+                <div class="hex-inner">
+                  <span class="hex-icon">🎁</span>
+                  <span class="hex-label">Rewards</span>
+                </div>
+              </button>
+            </div>
+
+            <!-- Lower Left Holographic Shop Billboard (like Image 1) -->
+            <div id="btn-shop-billboard" class="cmd-hologram-billboard" title="Open Pro Tennis Equipment Shop">
+              <div class="billboard-glow-frame">
+                <div class="billboard-header">
+                  <span class="bb-tag">FEATURED</span>
+                  <span class="bb-sale">🔥 SALE</span>
+                </div>
+                <div class="billboard-title">PRO TENNIS SHOP</div>
+                <div class="billboard-sub">Super Fire Blades &amp; Auras</div>
+                <div class="billboard-racket-preview">🎾 ⚡ 🔥</div>
+                <div class="billboard-footer">
+                  <span class="bb-cart-icon">🛒</span>
+                  <span>ENTER STORE</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 2. Center Battle Platform (Radiant Holographic Dais like Image 1 & 3) -->
+          <div class="cmd-center-stage">
+            <div class="battle-dais-container">
+              <div class="dais-light-beam"></div>
+              <div class="dais-halo-ring"></div>
+              <div class="dais-platform-ring"></div>
+
+              <!-- Big Radiant Center Battle Launch Button -->
+              <button id="btn-main-battle-start" type="button" class="battle-main-btn" title="Launch Battle Match">
+                <div class="btn-fire-pulse"></div>
+                <div class="btn-inner-content">
+                  <span class="battle-icon">🎾</span>
+                  <span class="battle-chinese-text">出击</span>
+                  <span class="battle-eng-text">PLAY MATCH</span>
+                </div>
+              </button>
+
+              <!-- Tactical Pedestal Switches (Modes) -->
+              <div class="dais-pedestals-orbit">
+                <button id="btn-pedestal-levels" type="button" class="dais-pedestal-btn active" title="100+ Level Tournament Circuit">
+                  <span class="pedestal-icon">🏆</span>
+                  <span class="pedestal-title">100+ LEVELS</span>
+                  <small class="pedestal-sub">120 Stages</small>
+                </button>
+                <button id="btn-pedestal-story" type="button" class="dais-pedestal-btn" title="6 Cinematic Story Chapters">
+                  <span class="pedestal-icon">📖</span>
+                  <span class="pedestal-title">STORY MODE</span>
+                  <small class="pedestal-sub">6 Chapters</small>
+                </button>
+                <button id="btn-pedestal-ranked" type="button" class="dais-pedestal-btn" title="Ranked Competitive Ladder">
+                  <span class="pedestal-icon">⚡</span>
+                  <span class="pedestal-title">RANKED</span>
+                  <small class="pedestal-sub">Bronze ➔ Master</small>
+                </button>
+                <button id="btn-pedestal-doubles" type="button" class="dais-pedestal-btn" title="2v2 Doubles Free Play">
+                  <span class="pedestal-icon">👥</span>
+                  <span class="pedestal-title">2v2 DOUBLES</span>
+                  <small class="pedestal-sub">Team &amp; Bots</small>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 3. Right Floating Holographic Terminal Card (like Image 1) -->
+          <div class="cmd-right-col">
+            <div class="cmd-operator-terminal">
+              <div class="terminal-scanlines"></div>
+              <div class="terminal-header">
+                <span class="term-tag">TENNIS OPERATOR</span>
+                <span id="term-operator-title" class="term-rank">Thunder Ace</span>
+              </div>
+
+              <!-- Holographic Character Display -->
+              <div class="terminal-char-display">
+                <canvas id="terminal-operator-avatar" width="160" height="160"></canvas>
+                <div class="terminal-char-name" id="terminal-operator-name">Ammaar</div>
+                <div class="terminal-personality-pill" id="terminal-personality-pill">⚡ Aggressive: +10% Power</div>
+                <div class="terminal-racket-label">RACKET: <span id="term-racket-name">🔥 Firestorm Blade</span></div>
+              </div>
+
+              <!-- Stats Radar Bars -->
+              <div class="terminal-stats-list">
+                <div class="stat-row">
+                  <span class="stat-name">Speed</span>
+                  <div class="stat-track"><div class="stat-bar" style="width: 94%"></div></div>
+                  <span class="stat-num">94</span>
+                </div>
+                <div class="stat-row">
+                  <span class="stat-name">Spin</span>
+                  <div class="stat-track"><div class="stat-bar" style="width: 90%"></div></div>
+                  <span class="stat-num">90</span>
+                </div>
+                <div class="stat-row">
+                  <span class="stat-name">Smash</span>
+                  <div class="stat-track"><div class="stat-bar" style="width: 92%"></div></div>
+                  <span class="stat-num">92</span>
+                </div>
+                <div class="stat-row">
+                  <span class="stat-name">Stamina</span>
+                  <div class="stat-track"><div class="stat-bar" style="width: 88%"></div></div>
+                  <span class="stat-num">88</span>
+                </div>
+              </div>
+
+              <!-- Terminal Lower Actions Cluster (Image 1 style) -->
+              <div class="terminal-action-dials">
+                <button id="btn-term-friends" type="button" class="dial-btn" title="Friends &amp; Rivals">
+                  <span class="dial-icon">👥</span>
+                  <span class="dial-label">Friends</span>
+                </button>
+                <button id="btn-term-bag" type="button" class="dial-btn" title="Backpack &amp; Equipment">
+                  <span class="dial-icon">🎒</span>
+                  <span class="dial-label">Gear</span>
+                </button>
+                <button id="btn-term-ranks" type="button" class="dial-btn" title="Rank Leaderboard">
+                  <span class="dial-icon">🏆</span>
+                  <span class="dial-label">Ranks</span>
+                </button>
+                <button id="btn-term-chat" type="button" class="dial-btn" title="Team Code &amp; Chat">
+                  <span class="dial-icon">💬</span>
+                  <span class="dial-label">Team</span>
+                </button>
+                <button id="btn-term-history" type="button" class="dial-btn" title="Recent Match History &amp; Records">
+                  <span class="dial-icon">📜</span>
+                  <span class="dial-label">History</span>
+                </button>
+              </div>
+
+              <!-- Terminal Highlight: 15s Cinematic Instant Replay Button -->
+              <button id="btn-term-replay" type="button" class="terminal-replay-btn" title="Watch 15s Cinematic Instant Replay of Previous Rally">
+                <span class="trp-glow"></span>
+                <span class="trp-icon">🎬</span>
+                <div class="trp-text">
+                  <span class="trp-title">INSTANT REPLAY</span>
+                  <small class="trp-sub">15s Previous Rally Highlight ➔</small>
+                </div>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+        <!-- Bottom Bar (Chat, Match Modes SOLO/DUO/SQUAD, Game Library Switcher, and Primary START Button) -->
+        <footer class="lobby-bottom-bar">
+          <!-- Left: World Chat / Lobby Chat drawer trigger -->
+          <div class="bottom-chat-pill" id="btn-lobby-chat-toggle" title="Open World Chat">
+            <span class="chat-icon">💬</span>
+            <div class="chat-snippet-col">
+              <span class="chat-channel-tag">[WORLD]</span>
+              <span class="chat-snippet-text" id="chat-latest-snippet">Matt: Ready for 2v2 finals!</span>
+            </div>
+          </div>
+
+          <!-- Center: Mode Selector Buttons (SOLO, DUO, SQUAD) -->
+          <div class="bottom-mode-selector">
+            <button id="btn-mode-solo" type="button" class="mode-select-btn active" data-mode="solo" title="Compete Alone in 1v1">
+              <span class="m-icon">👤</span>
+              <span class="m-title">SOLO</span>
+              <span class="m-slots">1/1</span>
+            </button>
+            <button id="btn-mode-duo" type="button" class="mode-select-btn" data-mode="duo" title="2-Player Team Matchmaking">
+              <span class="m-icon">👥</span>
+              <span class="m-title">DUO</span>
+              <span class="m-slots">1/2</span>
+            </button>
+            <button id="btn-mode-squad" type="button" class="mode-select-btn" data-mode="squad" title="Squad 4-Player Team">
+              <span class="m-icon">🛡️</span>
+              <span class="m-title">SQUAD</span>
+              <span class="m-slots">1/4</span>
+            </button>
+          </div>
+
+          <!-- Right: Game Library Quick Picker & Primary START Button -->
+          <div class="bottom-actions-right">
+            <button id="btn-open-game-library" type="button" class="bottom-game-switch-btn" title="Choose Active Game from Library">
+              <span class="b-game-icon">🎮</span>
+              <div class="b-game-meta">
+                <span class="b-game-title" id="bottom-active-game-title">RAzy Tennis 3D</span>
+                <small class="b-game-badge">Landscape Native</small>
+              </div>
+              <span class="b-game-arrow">▾</span>
+            </button>
+
+            <!-- Primary START Match Button -->
+            <button id="btn-lobby-start-match" type="button" class="bottom-primary-start-btn" title="Launch Match Preparation">
+              <div class="btn-start-energy-fx"></div>
+              <span class="start-icon">⚡</span>
+              <span class="start-label">START MATCH</span>
+            </button>
+          </div>
+        </footer>
+
+        <!-- Floating 1-Click Quick Match (Casual AI) Button -->
+        <button id="btn-lobby-quick-casual" type="button" class="lobby-floating-quick-btn" title="Instant 1-Click Casual AI Match">
+          <div class="quick-pulse-halo"></div>
+          <span class="quick-icon">⚡</span>
+          <div class="quick-meta">
+            <span class="quick-title">QUICK MATCH</span>
+            <small class="quick-sub">Casual AI • 1-Click ➔</small>
+          </div>
+        </button>
+      </div>
+    </div>
+
+    <!-- =====================================================================
+         HOLOGRAPHIC OVERLAY MODALS (Profile, 100+ Levels, Story, Ranks, etc.)
+         ===================================================================== -->
+
+    <!-- A. FULL USER PROFILE MODAL -->
+    <div id="user-profile-modal" class="cyber-modal-backdrop hidden">
+      <div class="cyber-modal-card profile-modal-card">
+        <div class="cyber-modal-header">
+          <div class="modal-title-wrap">
+            <span class="modal-super">PLAYER PASSPORT</span>
+            <h3 class="modal-title">USER PROFILE &amp; CAREER</h3>
+          </div>
+          <button type="button" class="cyber-close-btn" data-close="user-profile-modal">✕</button>
+        </div>
+        <div class="profile-modal-body">
+          <!-- Left: Big Avatar & Titles -->
+          <div class="prof-left-column">
+            <div class="prof-avatar-wrap">
+              <canvas id="prof-modal-avatar" width="140" height="140"></canvas>
+              <div class="prof-rank-stamp" id="prof-modal-rank-stamp">🥇 GOLD</div>
+            </div>
+            <div class="prof-personality-badge" id="prof-personality-badge">⚡ Aggressive: +10% Power</div>
+            <div class="prof-name-edit-row">
+              <input id="input-prof-edit-name" type="text" maxlength="16" value="Ammaar" />
+              <button id="btn-prof-save-name" type="button" class="prof-save-btn">Save</button>
+            </div>
+            <div class="prof-title-selector">
+              <label for="select-prof-title">Equipped Title:</label>
+              <select id="select-prof-title" class="cyber-select">
+                <option value="Thunder Ace">⚡ Thunder Ace</option>
+                <option value="Volcanic Smasher">🔥 Volcanic Smasher</option>
+                <option value="Court Phantom">👻 Court Phantom</option>
+                <option value="Spin Sorcerer">🌀 Spin Sorcerer</option>
+                <option value="Grand Champion">👑 Grand Champion</option>
+              </select>
+            </div>
+            <!-- Avatar Switcher -->
+            <div class="prof-avatar-picker-row">
+              <span class="picker-hint">Change Character:</span>
+              <div class="prof-mini-avatars">
+                <div class="mini-av-choice selected" data-av="player1">
+                  <canvas id="mini-av-1" width="48" height="48"></canvas>
+                </div>
+                <div class="mini-av-choice" data-av="player2">
+                  <canvas id="mini-av-2" width="48" height="48"></canvas>
+                </div>
+                <div class="mini-av-choice" data-av="opponent1">
+                  <canvas id="mini-av-3" width="48" height="48"></canvas>
+                </div>
+                <div class="mini-av-choice" data-av="opponent2">
+                  <canvas id="mini-av-4" width="48" height="48"></canvas>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right: Detailed Career Stats & Rank Breakdown & Mii Personality -->
+          <div class="prof-right-column">
+            <!-- Rank Progress Card -->
+            <div class="prof-rank-showcase">
+              <div class="rank-card-header">
+                <span class="rc-medal" id="prof-card-medal">🥇</span>
+                <div class="rc-info">
+                  <div class="rc-tier" id="prof-card-tier">Gold II</div>
+                  <div class="rc-rp" id="prof-card-rp">1,680 Rank Points</div>
+                </div>
+                <div class="rc-next" id="prof-card-next">Next: Gold I in 120 RP</div>
+              </div>
+              <div class="rc-progress-bar">
+                <div id="prof-card-progress" class="rc-progress-fill" style="width: 60%"></div>
+              </div>
+            </div>
+
+            <!-- Career Statistics Grid -->
+            <div class="prof-stats-grid">
+              <div class="p-stat-box">
+                <span class="p-stat-lbl">Matches Played</span>
+                <span class="p-stat-val" id="prof-stat-matches">48</span>
+              </div>
+              <div class="p-stat-box">
+                <span class="p-stat-lbl">Win Rate</span>
+                <span class="p-stat-val text-green" id="prof-stat-winrate">87.5%</span>
+              </div>
+              <div class="p-stat-box">
+                <span class="p-stat-lbl">Total Stars</span>
+                <span class="p-stat-val text-gold" id="prof-stat-stars">⭐ 45 / 360</span>
+              </div>
+              <div class="p-stat-box">
+                <span class="p-stat-lbl">Top Serve Speed</span>
+                <span class="p-stat-val text-cyan" id="prof-stat-speed">178 km/h</span>
+              </div>
+              <div class="p-stat-box">
+                <span class="p-stat-lbl">Fire Shots Landed</span>
+                <span class="p-stat-val text-orange" id="prof-stat-fireshots">114</span>
+              </div>
+              <div class="p-stat-box">
+                <span class="p-stat-lbl">Highest World</span>
+                <span class="p-stat-val" id="prof-stat-world">World 4</span>
+              </div>
+            </div>
+
+            <!-- Permanent UID & Account Info -->
+            <div class="prof-uid-card">
+              <div class="p-uid-info">
+                <span class="p-uid-title">PERMANENT PLAYER UID:</span>
+                <strong id="prof-player-uid" class="p-uid-digits">RAZ-7F3A91C2</strong>
+                <small class="p-uid-date" id="prof-creation-date">Created: Oct 2026</small>
+              </div>
+              <button id="btn-prof-copy-uid" type="button" class="prof-copy-uid-btn" title="Copy UID to Clipboard">
+                📋 Copy UID
+              </button>
+            </div>
+
+            <!-- Profile Action Buttons (Edit Profile, Change Avatar, Copy UID, Match History, Settings, Logout) -->
+            <div class="prof-action-buttons-row">
+              <button id="btn-prof-change-avatar" type="button" class="prof-action-btn">
+                <span>👤 Change Avatar</span>
+              </button>
+              <button id="btn-prof-match-history" type="button" class="prof-action-btn">
+                <span>📜 Match History</span>
+              </button>
+              <button id="btn-prof-open-settings" type="button" class="prof-action-btn">
+                <span>⚙️ Account Settings</span>
+              </button>
+              <button id="btn-prof-logout" type="button" class="prof-action-btn danger">
+                <span>🚪 Log Out</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- B. 100+ LEVELS BROWSER MODAL (120 Stages across 10 Worlds) -->
+    <div id="levels-browser-modal" class="cyber-modal-backdrop hidden">
+      <div class="cyber-modal-card levels-modal-card">
+        <div class="cyber-modal-header">
+          <div class="modal-title-wrap">
+            <span class="modal-super">100+ LEVEL TOURNAMENT WORLD TOUR</span>
+            <h3 class="modal-title">🏆 120 TOURNAMENT STAGES</h3>
+          </div>
+          <div class="levels-header-stats">
+            <span class="lvl-star-pill" id="levels-modal-star-count">Total Stars: ⭐ 45 / 360</span>
+            <button type="button" class="cyber-close-btn" data-close="levels-browser-modal">✕</button>
+          </div>
+        </div>
+
+        <!-- 10 World Circuit Tabs -->
+        <div class="world-tabs-strip" id="world-tabs-strip">
+          <!-- World 1 to 10 tabs injected here -->
+        </div>
+
+        <!-- 12 Stages Grid for Selected World -->
+        <div class="world-stages-grid" id="world-stages-grid">
+          <!-- 12 level cards for the active world -->
+        </div>
+      </div>
+    </div>
+
+    <!-- C. STORY MODE BROWSER MODAL -->
+    <div id="story-browser-modal" class="cyber-modal-backdrop hidden">
+      <div class="cyber-modal-card story-modal-card">
+        <div class="cyber-modal-header">
+          <div class="modal-title-wrap">
+            <span class="modal-super">RAZY ODYSSEY NARRATIVE</span>
+            <h3 class="modal-title">📖 STORY MODE CHAPTERS</h3>
+          </div>
+          <button type="button" class="cyber-close-btn" data-close="story-browser-modal">✕</button>
+        </div>
+        <div class="story-modal-body">
+          <div class="story-chapters-accordion" id="story-chapters-accordion">
+            <!-- 6 chapters with dialogue previews & play buttons -->
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- D. RANKED SYSTEM & LEADERBOARDS MODAL -->
+    <div id="ranked-system-modal" class="cyber-modal-backdrop hidden">
+      <div class="cyber-modal-card ranks-modal-card">
+        <div class="cyber-modal-header">
+          <div class="modal-title-wrap">
+            <span class="modal-super">COMPETITIVE LEAGUE</span>
+            <h3 class="modal-title">⚡ RANK TIERS &amp; LEADERBOARD</h3>
+          </div>
+          <button type="button" class="cyber-close-btn" data-close="ranked-system-modal">✕</button>
+        </div>
+        <div class="ranks-modal-body">
+          <!-- Left: Rank Tier Progression Ladder (Bronze -> Silver -> Gold -> Platinum -> Diamond -> Master -> Champion) -->
+          <div class="rank-ladder-col">
+            <div class="ladder-title">LEAGUE TIERS (BRONZE ➔ CHAMPION)</div>
+            <div class="rank-tiers-list" id="rank-tiers-list">
+              <!-- Tier cards with RP ranges -->
+            </div>
+          </div>
+          <!-- Right: Global Season Standing -->
+          <div class="rank-leaderboard-col">
+            <div class="ladder-title">GLOBAL TOP 10 CHAMPIONS</div>
+            <div class="leaderboard-list" id="rank-leaderboard-list">
+              <!-- Top players -->
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- E. DAILY TASKS & QUESTS MODAL -->
+    <div id="quests-modal" class="cyber-modal-backdrop hidden">
+      <div class="cyber-modal-card quests-modal-card">
+        <div class="cyber-modal-header">
+          <div class="modal-title-wrap">
+            <span class="modal-super">DAILY REWARDS &amp; CHALLENGES</span>
+            <h3 class="modal-title">📋 TACTICAL QUESTS</h3>
+          </div>
+          <div class="quests-header-actions">
+            <div class="quests-overall-pill" id="quests-overall-pill">Tactical Progress: <strong id="quests-overall-pct">68%</strong></div>
+            <button type="button" class="cyber-close-btn" data-close="quests-modal">✕</button>
+          </div>
+        </div>
+        <div class="quests-filter-bar" id="quests-filter-bar">
+          <button type="button" class="q-filter-btn active" data-filter="all">All Quests</button>
+          <button type="button" class="q-filter-btn" data-filter="in_progress">In Progress</button>
+          <button type="button" class="q-filter-btn" data-filter="ready">Ready to Claim</button>
+        </div>
+        <div class="quests-modal-body" id="quests-list-container">
+          <!-- Quests injected dynamically with animated progress bars & Claim buttons -->
+        </div>
+      </div>
+    </div>
+
+    <!-- F. SYSTEM MAILBOX MODAL -->
+    <div id="mailbox-modal" class="cyber-modal-backdrop hidden">
+      <div class="cyber-modal-card mail-modal-card">
+        <div class="cyber-modal-header">
+          <div class="modal-title-wrap">
+            <span class="modal-super">COMMUNICATIONS</span>
+            <h3 class="modal-title">✉️ SYSTEM INBOX</h3>
+          </div>
+          <button type="button" class="cyber-close-btn" data-close="mailbox-modal">✕</button>
+        </div>
+        <div class="mail-modal-body" id="mail-list-container">
+          <!-- Mails injected here -->
+        </div>
+        <div class="mail-footer-actions">
+          <button id="btn-claim-all-mail" type="button" class="cyber-accent-btn">Claim All Gifts (🎁 90,000 Coins)</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- G. 7-DAY DAILY CHECK-IN MODAL -->
+    <div id="checkin-modal" class="cyber-modal-backdrop hidden">
+      <div class="cyber-modal-card checkin-modal-card">
+        <div class="cyber-modal-header">
+          <div class="modal-title-wrap">
+            <span class="modal-super">ATTENDANCE BONUS</span>
+            <h3 class="modal-title">🎁 7-DAY LOGIN REWARDS</h3>
+          </div>
+          <button type="button" class="cyber-close-btn" data-close="checkin-modal">✕</button>
+        </div>
+        <div class="checkin-modal-body" id="checkin-grid-container">
+          <!-- 7 day cards injected here -->
+        </div>
+      </div>
+    </div>
+
+    <!-- H. PRO TENNIS SHOP & GEAR MODAL -->
+    <div id="pro-shop-modal" class="cyber-modal-backdrop hidden">
+      <div class="cyber-modal-card shop-modal-card">
+        <div class="cyber-modal-header">
+          <div class="modal-title-wrap">
+            <span class="modal-super">EQUIPMENT &amp; AURAS</span>
+            <h3 class="modal-title">🛒 PRO TENNIS GEAR</h3>
+          </div>
+          <button type="button" class="cyber-close-btn" data-close="pro-shop-modal">✕</button>
+        </div>
+        <div class="shop-modal-body">
+          <div class="shop-grid">
+            <div class="shop-item-card">
+              <span class="shop-tag">GOLD TIER</span>
+              <div class="shop-item-icon">🔥</div>
+              <div class="shop-item-title">Firestorm Dragon Blade</div>
+              <div class="shop-item-stats">+18 km/h Smash • Blazing Flame Trail</div>
+              <button type="button" class="shop-buy-btn equipped">Equipped ✓</button>
+            </div>
+            <div class="shop-item-card">
+              <span class="shop-tag">PLATINUM</span>
+              <div class="shop-item-icon">⚡</div>
+              <div class="shop-item-title">Neo-Lightning Racket</div>
+              <div class="shop-item-stats">+22% Spin Control • Electric Impact FX</div>
+              <button type="button" class="shop-buy-btn">🪙 25,000 Coins</button>
+            </div>
+            <div class="shop-item-card">
+              <span class="shop-tag">DIAMOND</span>
+              <div class="shop-item-icon">💎</div>
+              <div class="shop-item-title">Cosmic Aurora Strings</div>
+              <div class="shop-item-stats">+15% Sweet Spot • Crystal Particle Aura</div>
+              <button type="button" class="shop-buy-btn">💎 1,200 Gems</button>
+            </div>
+            <div class="shop-item-card">
+              <span class="shop-tag">CHAMPION</span>
+              <div class="shop-item-icon">👑</div>
+              <div class="shop-item-title">RAzy Overlord Crown Racket</div>
+              <div class="shop-item-stats">Supersonic Sonic Boom &amp; Gold Spark</div>
+              <button type="button" class="shop-buy-btn">💎 3,000 Gems</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- I. 2V2 DOUBLES & TEAM ROOM MODAL -->
+    <div id="team-room-modal" class="cyber-modal-backdrop hidden">
+      <div class="cyber-modal-card team-modal-card">
+        <div class="cyber-modal-header">
+          <div class="modal-title-wrap">
+            <span class="modal-super">MATCHMAKING &amp; CODES</span>
+            <h3 class="modal-title">👥 2v2 DOUBLES &amp; TEAM LOBBY</h3>
+          </div>
+          <button type="button" class="cyber-close-btn" data-close="team-room-modal">✕</button>
+        </div>
+        <div class="team-modal-body">
+          <div class="team-code-card">
+            <span class="tc-label">Your Team Code:</span>
+            <span id="lobby-team-code" class="tc-code">RAZ-704</span>
+            <button id="btn-copy-team-code" type="button" class="tc-btn">📋 Copy</button>
+            <button id="btn-new-team-code" type="button" class="tc-btn">↻ New</button>
+          </div>
+          <div class="join-row">
+            <input id="input-join-code" type="text" maxlength="8" placeholder="Enter Friend's Team Code" />
+            <button id="btn-join-team-code" type="button" class="cyber-accent-btn">Join Team</button>
+          </div>
+          <div class="team-friends-wrap">
+            <div class="friends-heading">Online Friends:</div>
+            <div id="lobby-friends-list" class="friends-scroll-box"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- J. RECENT MATCH HISTORY & RECORDS MODAL -->
+    <div id="match-history-modal" class="cyber-modal-backdrop hidden">
+      <div class="cyber-modal-card history-modal-card">
+        <div class="cyber-modal-header">
+          <div class="modal-title-wrap">
+            <span class="modal-super">CHRONOLOGICAL CAREER RECORDS</span>
+            <h3 class="modal-title">📜 RECENT MATCH RESULTS</h3>
+          </div>
+          <button type="button" class="cyber-close-btn" data-close="match-history-modal">✕</button>
+        </div>
+        <div class="history-modal-body">
+          <div class="history-summary-stats">
+            <div class="h-stat-box">
+              <span class="h-val" id="hist-total-played">48</span>
+              <span class="h-lbl">Played</span>
+            </div>
+            <div class="h-stat-box gold">
+              <span class="h-val" id="hist-total-won">42</span>
+              <span class="h-lbl">Victories</span>
+            </div>
+            <div class="h-stat-box cyan">
+              <span class="h-val" id="hist-win-rate">87.5%</span>
+              <span class="h-lbl">Win Rate</span>
+            </div>
+            <div class="h-stat-box green">
+              <span class="h-val" id="hist-total-stars">⭐ 118</span>
+              <span class="h-lbl">Stars</span>
+            </div>
+          </div>
+          <div class="history-list-header">
+            <span>RECENT MATCH LOG (CHRONOLOGICAL)</span>
+            <span class="hist-badge-tag">Auto-Saved</span>
+          </div>
+          <div id="history-items-container" class="history-items-container">
+            <!-- Dynamic match record cards populated by lobby_manager.js -->
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 6. STORY DIALOGUE / CUTSCENE MODAL -->
+    <div id="story-dialogue-modal" class="story-dialogue-backdrop hidden">
+      <div class="story-dialogue-box">
+        <div class="dialogue-meta-bar">
+          <div class="dialogue-chap-info">
+            <span class="chap-badge" id="dialogue-chapter-title">Chapter 1: The Rookie Awakening</span>
+            <span class="loc-badge" id="dialogue-location">Sunshine Grass Courts</span>
+          </div>
+          <div class="dialogue-mission-pill">
+            <span>🎯</span> <span id="dialogue-objective">Win Best of 3 to advance!</span>
+          </div>
+        </div>
+        <div class="dialogue-stage-area">
+          <div id="dialogue-speaker-player" class="dialogue-actor-card actor-player">
+            <div class="actor-avatar-ring">
+              <canvas id="dialogue-mii-player" width="128" height="128"></canvas>
+            </div>
+            <span class="actor-label" id="dialogue-player-name">Player</span>
+          </div>
+          <div class="dialogue-bubble-frame">
+            <div class="bubble-speaker-tag" id="dialogue-speaker-name">Leo</div>
+            <p class="bubble-text" id="dialogue-speech-text">
+              Think your reflexes can keep up with the crazy spin of RAzy Tennis?
+            </p>
+            <div class="bubble-arrow"></div>
+          </div>
+          <div id="dialogue-speaker-rival" class="dialogue-actor-card actor-rival active-speaker">
+            <div class="actor-avatar-ring">
+              <canvas id="dialogue-mii-rival" width="128" height="128"></canvas>
+            </div>
+            <span class="actor-label" id="dialogue-rival-name">Leo</span>
+          </div>
+        </div>
+        <div class="dialogue-footer-actions">
+          <button id="btn-dialogue-skip" type="button" class="dialogue-sub-btn">Skip Scene ⏩</button>
+          <button id="btn-dialogue-next" type="button" class="dialogue-primary-btn">Next ➔</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- I. CINEMATIC INSTANT REPLAY THEATRE MODAL (15-SECOND PREVIOUS RALLY HIGHLIGHT) -->
+    <div id="cinematic-replay-modal" class="cyber-modal-backdrop hidden">
+      <div class="cyber-modal-card replay-theatre-card">
+        <div class="replay-theatre-header">
+          <div class="r-badge-live">
+            <span class="r-rec-dot"></span>
+            <span>CINEMATIC REPLAY</span>
+          </div>
+          <div class="r-info-col">
+            <h3 class="r-title">15-SECOND PREVIOUS RALLY HIGHLIGHT</h3>
+            <span class="r-meta" id="replay-meta-text">Ammaar vs Overlord Titan • 178 km/h Fire Smash</span>
+          </div>
+          <button type="button" class="cyber-close-btn" id="btn-close-cinematic-replay" data-close="cinematic-replay-modal">✕</button>
+        </div>
+
+        <!-- Live Viewport / Replay Broadcast Overlay View -->
+        <div class="replay-viewport-frame" id="replay-viewport-frame">
+          <div class="replay-scanline-fx"></div>
+          <div class="replay-camera-badge" id="replay-camera-badge">🎥 CAM 1: DYNAMIC ORBIT</div>
+          <div class="replay-speed-badge" id="replay-speed-badge">1.0x SPEED</div>
+          <div class="replay-watermark">ARGON REPLAY ENGINE • 15s BUFFER</div>
+        </div>
+
+        <!-- Replay Playback & Timeline Controls -->
+        <div class="replay-theatre-controls">
+          <div class="replay-scrub-row">
+            <span class="replay-time-txt" id="replay-current-time">0:00</span>
+            <input type="range" id="replay-scrub-slider" min="0" max="15" step="0.1" value="0" class="replay-slider" />
+            <span class="replay-time-txt" id="replay-total-time">0:15</span>
+          </div>
+
+          <div class="replay-btn-bar">
+            <!-- Play / Pause -->
+            <button type="button" id="btn-replay-play-pause" class="replay-ctrl-btn primary">
+              <span id="replay-play-icon">⏸</span> <span id="replay-play-txt">Pause</span>
+            </button>
+
+            <!-- Slow-mo speed toggles -->
+            <div class="replay-speed-group">
+              <button type="button" class="replay-spd-btn" data-speed="0.25">0.25x</button>
+              <button type="button" class="replay-spd-btn" data-speed="0.5">0.5x</button>
+              <button type="button" class="replay-spd-btn active" data-speed="1.0">1.0x</button>
+            </div>
+
+            <!-- Cinematic Camera Angle Switcher -->
+            <div class="replay-cam-group">
+              <button type="button" class="replay-cam-btn active" data-cam="orbit">🎥 Orbit</button>
+              <button type="button" class="replay-cam-btn" data-cam="sideline">⚡ Sideline</button>
+              <button type="button" class="replay-cam-btn" data-cam="net">🎾 Net POV</button>
+              <button type="button" class="replay-cam-btn" data-cam="drone">🚁 Drone</button>
+            </div>
+
+            <!-- Restart / Replay Again -->
+            <button type="button" id="btn-replay-restart" class="replay-ctrl-btn secondary">
+              <span>↻ Restart</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- =====================================================================
+         K. MATCH PREPARATION OVERLAY (Section 9)
+         ===================================================================== -->
+    <div id="match-prep-modal" class="cyber-modal-backdrop hidden">
+      <div class="cyber-modal-card match-prep-card">
+        <div class="prep-scanner-wrap">
+          <div class="prep-radar-grid">
+            <div class="radar-sweep-beam"></div>
+            <div class="radar-pulse-ring r1"></div>
+            <div class="radar-pulse-ring r2"></div>
+            <div class="radar-pulse-ring r3"></div>
+            <span class="prep-radar-icon">⚡</span>
+          </div>
+          <div class="prep-status-banner">
+            <span class="prep-status-tag">MATCHMAKING ACTIVE</span>
+            <h3 class="prep-status-headline" id="prep-status-headline">SEARCHING FOR OPPONENT…</h3>
+            <div class="prep-timer-pill">
+              <span>ELAPSED TIME:</span>
+              <strong id="prep-elapsed-timer">00:03</strong>
+            </div>
+          </div>
+        </div>
+
+        <div class="prep-details-panel">
+          <div class="prep-meta-col">
+            <span class="pm-lbl">SELECTED GAME</span>
+            <strong class="pm-val" id="prep-game-title">RAzy Tennis 3D</strong>
+          </div>
+          <div class="prep-meta-col">
+            <span class="pm-lbl">GAME MODE</span>
+            <strong class="pm-val text-gold" id="prep-mode-title">SOLO (1v1)</strong>
+          </div>
+          <div class="prep-meta-col">
+            <span class="pm-lbl">SERVER REGION</span>
+            <strong class="pm-val text-cyan">GLOBAL • 24ms</strong>
+          </div>
+          <div class="prep-meta-col">
+            <span class="pm-lbl">SECURITY AUTH</span>
+            <strong class="pm-val text-green">VERIFIED ✓</strong>
+          </div>
+        </div>
+
+        <!-- Party Slot Indicators -->
+        <div class="prep-party-slots" id="prep-party-slots-row">
+          <!-- Injected slots (You + teammates or AI) -->
+        </div>
+
+        <!-- Match Preparation Action Buttons (Section 9) -->
+        <div class="prep-actions-row">
+          <button id="btn-prep-cancel" type="button" class="prep-btn danger" title="Cancel Active Matchmaking">
+            ✕ CANCEL MATCHMAKING
+          </button>
+          <button id="btn-prep-change-mode" type="button" class="prep-btn secondary" title="Switch Match Mode">
+            ⚙️ CHANGE MODE
+          </button>
+          <button id="btn-prep-retry" type="button" class="prep-btn secondary" title="Retry Match Connection">
+            ↻ RETRY
+          </button>
+          <button id="btn-prep-back-lobby" type="button" class="prep-btn primary" title="Return to Lobby">
+            🏠 BACK TO LOBBY
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- =====================================================================
+         L. DEDICATED GAME SELECTION & GAME LAUNCHER MODAL (Section 10)
+         ===================================================================== -->
+    <div id="game-library-modal" class="cyber-modal-backdrop hidden">
+      <div class="cyber-modal-card library-modal-card">
+        <div class="cyber-modal-header">
+          <div class="modal-title-wrap">
+            <span class="modal-super">RAZY UNIVERSAL LAUNCHER</span>
+            <h3 class="modal-title">🎮 GAME LIBRARY &amp; CATALOG</h3>
+          </div>
+          <button type="button" class="cyber-close-btn" data-close="game-library-modal">✕</button>
+        </div>
+
+        <div class="library-modal-body">
+          <div class="library-games-grid">
+            <!-- Game 1: RAzy Hyper-Arcade Tennis 3D (Flagship Built-in) -->
+            <div class="game-card-item active-selected" data-game-id="tennis-3d">
+              <div class="gc-badge-row">
+                <span class="gc-badge-primary">FLAGSHIP</span>
+                <span class="gc-orient-tag">⛶ LANDSCAPE NATIVE</span>
+              </div>
+              <div class="gc-preview-box tennis-theme">
+                <div class="gc-banner-icon">🎾</div>
+                <div class="gc-glow-wave"></div>
+              </div>
+              <div class="gc-info">
+                <h4 class="gc-title">RAzy Tennis 3D: Hyper-Arcade</h4>
+                <p class="gc-desc">Frantic 3D hyper-arcade tennis featuring 120 tournament stages, 6 story chapters, Mii kinematics, fire shots, and 2v2 doubles.</p>
+                <div class="gc-specs-row">
+                  <span>💾 38 MB</span>
+                  <span>·</span>
+                  <span>🌐 Online &amp; Offline</span>
+                  <span>·</span>
+                  <span>👥 Solo / Duo / Squad</span>
+                </div>
+              </div>
+              <div class="gc-action-col">
+                <button type="button" class="gc-play-btn active-installed" data-select-game="tennis-3d">
+                  ✓ ACTIVE GAME
+                </button>
+              </div>
+            </div>
+
+            <!-- Game 2: RAzy Cyber Velocity 2D Dash -->
+            <div class="game-card-item" data-game-id="cyber-dash">
+              <div class="gc-badge-row">
+                <span class="gc-badge-sec">ARCADE ACTION</span>
+                <span class="gc-orient-tag">⛶ AUTO LANDSCAPE</span>
+              </div>
+              <div class="gc-preview-box dash-theme">
+                <div class="gc-banner-icon">⚡</div>
+                <div class="gc-glow-wave"></div>
+              </div>
+              <div class="gc-info">
+                <h4 class="gc-title">RAzy Cyber Velocity: Dash 2D</h4>
+                <p class="gc-desc">High-speed sonic reflex runner with gravity flips, cyber lasers, and electronic synth beats across neon skyscrapers.</p>
+                <div class="gc-specs-row">
+                  <span>💾 14 MB</span>
+                  <span>·</span>
+                  <span>🌐 Offline Ready</span>
+                  <span>·</span>
+                  <span>👤 Solo Endless</span>
+                </div>
+              </div>
+              <div class="gc-action-col">
+                <button type="button" class="gc-play-btn" data-select-game="cyber-dash">
+                  SELECT &amp; PLAY ➔
+                </button>
+              </div>
+            </div>
+
+            <!-- Game 3: RAzy Neon Striker Space Defense -->
+            <div class="game-card-item" data-game-id="neon-striker">
+              <div class="gc-badge-row">
+                <span class="gc-badge-sec">SPACE SHOOTER</span>
+                <span class="gc-orient-tag">⛶ FULLSCREEN HORIZONTAL</span>
+              </div>
+              <div class="gc-preview-box striker-theme">
+                <div class="gc-banner-icon">🚀</div>
+                <div class="gc-glow-wave"></div>
+              </div>
+              <div class="gc-info">
+                <h4 class="gc-title">RAzy Neon Striker: Galaxy Fleet</h4>
+                <p class="gc-desc">Space defense tactical fighter with plasma pulse blasters, asteroid fields, and giant cosmic boss battles.</p>
+                <div class="gc-specs-row">
+                  <span>💾 22 MB</span>
+                  <span>·</span>
+                  <span>🌐 Online Co-op</span>
+                  <span>·</span>
+                  <span>👥 Solo / Duo</span>
+                </div>
+              </div>
+              <div class="gc-action-col">
+                <button type="button" class="gc-play-btn" data-select-game="neon-striker">
+                  SELECT &amp; PLAY ➔
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- =====================================================================
+         M. UNIVERSAL SETTINGS PANEL (Section 12: Display, Audio, Controls, Account)
+         ===================================================================== -->
+    <div id="universal-settings-modal" class="cyber-modal-backdrop hidden">
+      <div class="cyber-modal-card settings-modal-card">
+        <div class="cyber-modal-header">
+          <div class="modal-title-wrap">
+            <span class="modal-super">SYSTEM &amp; ENGINE CONFIG</span>
+            <h3 class="modal-title">⚙️ UNIVERSAL SETTINGS</h3>
+          </div>
+          <button type="button" class="cyber-close-btn" data-close="universal-settings-modal">✕</button>
+        </div>
+
+        <div class="settings-modal-tabs">
+          <button type="button" class="settings-tab-btn active" data-tab="display">⛶ Display</button>
+          <button type="button" class="settings-tab-btn" data-tab="audio">🎵 Audio</button>
+          <button type="button" class="settings-tab-btn" data-tab="controls">🎮 Controls</button>
+          <button type="button" class="settings-tab-btn" data-tab="account">👤 Account</button>
+          <button type="button" class="settings-tab-btn" data-tab="apk">📦 APK &amp; App</button>
+        </div>
+
+        <div class="settings-modal-body">
+          <!-- 1. Display Tab -->
+          <div class="settings-panel-content" id="tab-display">
+            <div class="setting-row">
+              <div class="setting-info">
+                <strong class="setting-title">Fullscreen Mode</strong>
+                <span class="setting-desc">Enter edge-to-edge immersive view without browser toolbars</span>
+              </div>
+              <button id="btn-toggle-fullscreen-setting" type="button" class="setting-action-btn">
+                ⛶ Enter Fullscreen
+              </button>
+            </div>
+
+            <div class="setting-row">
+              <div class="setting-info">
+                <strong class="setting-title">Landscape Orientation Rule</strong>
+                <span class="setting-desc">Viewport adaptation behavior for supported games</span>
+              </div>
+              <select id="select-orientation-rule" class="cyber-select">
+                <option value="auto" selected>Auto Landscape (Recommended)</option>
+                <option value="force">Force Landscape Only</option>
+                <option value="original">Original Game Orientation</option>
+              </select>
+            </div>
+
+            <div class="setting-row">
+              <div class="setting-info">
+                <strong class="setting-title">Graphics Quality</strong>
+                <span class="setting-desc">Particle density, shadows, and 3D court rendering fidelity</span>
+              </div>
+              <select id="select-graphics-quality" class="cyber-select">
+                <option value="ultra">Ultra (60 FPS + Volumetric Bloom)</option>
+                <option value="high" selected>High (Balanced Smooth 60 FPS)</option>
+                <option value="medium">Medium (Optimized for Mobile)</option>
+                <option value="low">Low (Battery Saver)</option>
+              </select>
+            </div>
+
+            <div class="setting-row">
+              <div class="setting-info">
+                <strong class="setting-title">Target Frame Rate</strong>
+                <span class="setting-desc">Physics update and rendering refresh frequency</span>
+              </div>
+              <select id="select-fps-target" class="cyber-select">
+                <option value="60" selected>60 FPS (Arcade Smooth)</option>
+                <option value="120">120 FPS (High Refresh Display)</option>
+              </select>
+            </div>
+
+            <div class="setting-actions-footer">
+              <button id="btn-restore-display-defaults" type="button" class="setting-sub-btn">
+                ↺ Restore Default Display Settings
+              </button>
+            </div>
+          </div>
+
+          <!-- 2. Audio Tab -->
+          <div class="settings-panel-content hidden" id="tab-audio">
+            <div class="setting-slider-group">
+              <div class="slider-label-row">
+                <strong>Master Volume</strong>
+                <span id="label-master-vol">100%</span>
+              </div>
+              <input type="range" id="slider-master-vol" min="0" max="100" value="100" class="setting-slider" />
+            </div>
+
+            <div class="setting-slider-group">
+              <div class="slider-label-row">
+                <strong>Music &amp; Soundtrack</strong>
+                <span id="label-music-vol">85%</span>
+              </div>
+              <input type="range" id="slider-music-vol" min="0" max="100" value="85" class="setting-slider" />
+            </div>
+
+            <div class="setting-slider-group">
+              <div class="slider-label-row">
+                <strong>Sound Effects (SFX)</strong>
+                <span id="label-sfx-vol">95%</span>
+              </div>
+              <input type="range" id="slider-sfx-vol" min="0" max="100" value="95" class="setting-slider" />
+            </div>
+
+            <div class="setting-slider-group">
+              <div class="slider-label-row">
+                <strong>Mii Expressions &amp; Crowds</strong>
+                <span id="label-voice-vol">90%</span>
+              </div>
+              <input type="range" id="slider-voice-vol" min="0" max="100" value="90" class="setting-slider" />
+            </div>
+          </div>
+
+          <!-- 3. Controls Tab -->
+          <div class="settings-panel-content hidden" id="tab-controls">
+            <div class="setting-row">
+              <div class="setting-info">
+                <strong class="setting-title">Touch Control Layout</strong>
+                <span class="setting-desc">On-screen buttons for mobile &amp; tablet gameplay</span>
+              </div>
+              <select id="select-control-layout" class="cyber-select">
+                <option value="dual-thumb" selected>Dual-Thumb Arcade (Joystick + Swing/Slice)</option>
+                <option value="virtual-pad">Virtual Pad Only</option>
+                <option value="swipe-gestures">Swipe &amp; Tap Gestures</option>
+              </select>
+            </div>
+
+            <div class="setting-row">
+              <div class="setting-info">
+                <strong class="setting-title">Button Size Scale</strong>
+                <span class="setting-desc">Touch target size for action buttons</span>
+              </div>
+              <select id="select-button-size" class="cyber-select">
+                <option value="standard" selected>Standard (54px)</option>
+                <option value="large">Large (64px - Accessible)</option>
+                <option value="compact">Compact (46px)</option>
+              </select>
+            </div>
+
+            <div class="setting-slider-group">
+              <div class="slider-label-row">
+                <strong>Joystick Sensitivity</strong>
+                <span id="label-sensitivity">1.0x</span>
+              </div>
+              <input type="range" id="slider-sensitivity" min="50" max="200" value="100" class="setting-slider" />
+            </div>
+
+            <div class="setting-actions-footer">
+              <button id="btn-reset-controls" type="button" class="setting-sub-btn">
+                ↺ Reset Controls to Default
+              </button>
+            </div>
+          </div>
+
+          <!-- 4. Account Tab (Section 12) -->
+          <div class="settings-panel-content hidden" id="tab-account">
+            <div class="account-card-box">
+              <div class="acc-row">
+                <span class="acc-lbl">Permanent Player UID:</span>
+                <strong id="settings-account-uid" class="acc-val">RAZ-7F3A91C2</strong>
+                <button id="btn-settings-copy-uid" type="button" class="mini-copy-btn">📋 Copy UID</button>
+              </div>
+              <div class="acc-row">
+                <span class="acc-lbl">Linked Authentication:</span>
+                <span id="settings-linked-auth" class="acc-val text-cyan">Google (playixkid@gmail.com)</span>
+              </div>
+              <div class="acc-row">
+                <span class="acc-lbl">Session Status:</span>
+                <span class="acc-val text-green">✓ Secure Active Session</span>
+              </div>
+            </div>
+
+            <div class="account-actions-stack">
+              <div class="acc-legal-links-row">
+                <button type="button" id="btn-settings-privacy" class="legal-link-btn">📜 Privacy Policy</button>
+                <span>·</span>
+                <button type="button" id="btn-settings-terms" class="legal-link-btn">📑 Terms of Service</button>
+              </div>
+
+              <div class="acc-danger-row">
+                <button id="btn-settings-logout" type="button" class="setting-danger-btn">
+                  🚪 Log Out of RAzy
+                </button>
+                <button id="btn-settings-delete-account" type="button" class="setting-danger-btn outline">
+                  🗑️ Delete Account Data…
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 5. APK & Native Android App Tab -->
+          <div class="settings-panel-content hidden" id="tab-apk">
+            <!-- Direct Download Hero Grid -->
+            <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(260px, 1fr));gap:12px;margin-bottom:14px;">
+              <!-- APK Card -->
+              <div style="background:linear-gradient(135deg, rgba(16,185,129,0.12) 0%, rgba(15,23,42,0.85) 100%);border:1px solid rgba(16,185,129,0.35);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:10px;text-align:left;position:relative;overflow:hidden;">
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                  <span style="font-size:24px;">📦</span>
+                  <span style="background:rgba(16,185,129,0.2);color:#34d399;font-size:10px;font-weight:800;padding:2px 8px;border-radius:999px;border:1px solid rgba(16,185,129,0.4);letter-spacing:0.05em;">SIGNED RELEASE</span>
+                </div>
+                <div>
+                  <h4 style="margin:0;font-size:15px;font-weight:900;color:#ffffff;letter-spacing:-0.01em;">Android APK Package</h4>
+                  <p style="margin:2px 0 0;font-size:11px;color:#94a3b8;">Direct sideloadable installer for phones, tablets &amp; TVs</p>
+                </div>
+                <div style="display:flex;justify-content:space-between;font-size:11px;color:#cbd5e1;background:rgba(0,0,0,0.3);padding:6px 10px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);">
+                  <span>File: <strong>razy-launcher.apk</strong></span>
+                  <span style="color:#34d399;font-weight:700;">~105 KB</span>
+                </div>
+                <a href="/downloads/razy-launcher.apk" download="razy-launcher.apk" class="setting-action-btn" style="text-decoration:none;display:flex;align-items:center;justify-content:center;gap:6px;background:linear-gradient(135deg, #10b981 0%, #059669 100%);color:#ffffff;font-weight:900;font-size:13px;padding:10px 14px;border-radius:10px;box-shadow:0 4px 14px rgba(16,185,129,0.35);">
+                  <span>⬇️ Download Signed APK</span>
+                </a>
+              </div>
+
+              <!-- AAB Card -->
+              <div style="background:linear-gradient(135deg, rgba(56,189,248,0.12) 0%, rgba(15,23,42,0.85) 100%);border:1px solid rgba(56,189,248,0.35);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:10px;text-align:left;position:relative;overflow:hidden;">
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                  <span style="font-size:24px;">🏛️</span>
+                  <span style="background:rgba(56,189,248,0.2);color:#38bdf8;font-size:10px;font-weight:800;padding:2px 8px;border-radius:999px;border:1px solid rgba(56,189,248,0.4);letter-spacing:0.05em;">GOOGLE PLAY STORE</span>
+                </div>
+                <div>
+                  <h4 style="margin:0;font-size:15px;font-weight:900;color:#ffffff;letter-spacing:-0.01em;">Android App Bundle (.aab)</h4>
+                  <p style="margin:2px 0 0;font-size:11px;color:#94a3b8;">Official Play Console distribution package with dynamic delivery</p>
+                </div>
+                <div style="display:flex;justify-content:space-between;font-size:11px;color:#cbd5e1;background:rgba(0,0,0,0.3);padding:6px 10px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);">
+                  <span>File: <strong>razy-launcher.aab</strong></span>
+                  <span style="color:#38bdf8;font-weight:700;">~94 KB</span>
+                </div>
+                <a href="/downloads/razy-launcher.aab" download="razy-launcher.aab" class="setting-action-btn" style="text-decoration:none;display:flex;align-items:center;justify-content:center;gap:6px;background:linear-gradient(135deg, #0284c7 0%, #0369a1 100%);color:#ffffff;font-weight:900;font-size:13px;padding:10px 14px;border-radius:10px;box-shadow:0 4px 14px rgba(56,189,248,0.35);">
+                  <span>⬇️ Download Play Store AAB</span>
+                </a>
+              </div>
+            </div>
+
+            <!-- Instant WebAPK & Home Screen Installer -->
+            <div class="account-card-box" style="margin-bottom:12px;">
+              <div class="acc-row" style="align-items:center;">
+                <div style="display:flex;flex-direction:column;gap:2px;">
+                  <strong style="color:#ffffff;font-size:13.5px;">⚡ Instant WebAPK Auto-Install</strong>
+                  <span style="color:#94a3b8;font-size:11px;">Install directly to Android without file transfers via Chrome WebAPK service</span>
+                </div>
+                <button id="btn-install-apk-prompt" type="button" class="setting-action-btn" style="background:#ffffff;color:#000;font-weight:900;white-space:nowrap;">
+                  📥 Add to Home Screen
+                </button>
+              </div>
+            </div>
+
+            <!-- Technical Specifications -->
+            <div class="account-card-box">
+              <div class="acc-row">
+                <span class="acc-lbl">Package Name:</span>
+                <span class="acc-val text-cyan">com.razy.launcher</span>
+              </div>
+              <div class="acc-row">
+                <span class="acc-lbl">Version / Build:</span>
+                <span class="acc-val text-white">1.0.1 (VersionCode 10001)</span>
+              </div>
+              <div class="acc-row">
+                <span class="acc-lbl">Target Platform:</span>
+                <span class="acc-val text-green">Android 6.0+ (API 23) up to Android 14 (API 34)</span>
+              </div>
+              <div class="acc-row">
+                <span class="acc-lbl">Orientation:</span>
+                <span class="acc-val text-gold">Sensor Landscape • Fullscreen Immersive Sticky</span>
+              </div>
+              <div class="acc-row">
+                <span class="acc-lbl">Signatures:</span>
+                <span class="acc-val text-green">✓ v1 (JAR), v2 (APK), v3 (APK v3) Verified</span>
+              </div>
+            </div>
+
+            <!-- Sideloading Instructions -->
+            <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.14);border-radius:12px;padding:12px 14px;margin-top:12px;text-align:left;">
+              <strong style="color:#ffffff;font-size:12.5px;">📲 How to install the APK file on Android:</strong>
+              <ol style="margin:6px 0 0;padding-left:18px;color:#cbd5e1;font-size:11.5px;line-height:1.6;">
+                <li>Click <strong>"Download Signed APK"</strong> above to save <code style="color:#34d399;">razy-launcher.apk</code> to your device.</li>
+                <li>Tap the downloaded file notification or locate it in your device's <strong>Files / Downloads</strong> app.</li>
+                <li>If prompted, tap <em>"Settings"</em> and enable <em>"Allow from this source"</em> to allow sideloading.</li>
+                <li>Tap <strong>"Install"</strong> — RAzy will install as a native landscape app with custom launcher icon!</li>
+              </ol>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- =====================================================================
+         N. CHARACTER WARDROBE & MII CUSTOMIZATION MODAL (Nav button 2)
+         ===================================================================== -->
+    <div id="character-wardrobe-modal" class="cyber-modal-backdrop hidden">
+      <div class="cyber-modal-card wardrobe-modal-card">
+        <div class="cyber-modal-header">
+          <div class="modal-title-wrap">
+            <span class="modal-super">PLAYER CUSTOMIZATION</span>
+            <h3 class="modal-title">👤 CHARACTER WARDROBE &amp; TRAITS</h3>
+          </div>
+          <button type="button" class="cyber-close-btn" data-close="character-wardrobe-modal">✕</button>
+        </div>
+
+        <div class="wardrobe-modal-body">
+          <div class="wardrobe-char-preview-col">
+            <canvas id="wardrobe-big-canvas" width="180" height="180"></canvas>
+            <h4 class="wb-name" id="wardrobe-char-name">Ammaar</h4>
+            <span class="wb-title">Thunder Ace</span>
+            <div class="wb-personality-pill" id="wardrobe-active-pill">⚡ Aggressive: +10% Smash Power</div>
+          </div>
+
+          <div class="wardrobe-options-col">
+            <div class="wb-section-heading">CHOOSE OPERATOR MII:</div>
+            <div class="wb-avatars-grid">
+              <div class="wb-avatar-card selected" data-av="player1">
+                <canvas id="wb-mii-1" width="60" height="60"></canvas>
+                <span>Ammaar</span>
+                <span class="wb-tag">EQUIPPED</span>
+              </div>
+              <div class="wb-avatar-card" data-av="player2">
+                <canvas id="wb-mii-2" width="60" height="60"></canvas>
+                <span>Sarah</span>
+                <span class="wb-tag select">SELECT</span>
+              </div>
+              <div class="wb-avatar-card" data-av="opponent1">
+                <canvas id="wb-mii-3" width="60" height="60"></canvas>
+                <span>Matt</span>
+                <span class="wb-tag select">SELECT</span>
+              </div>
+              <div class="wb-avatar-card" data-av="opponent2">
+                <canvas id="wb-mii-4" width="60" height="60"></canvas>
+                <span>Elisa</span>
+                <span class="wb-tag select">SELECT</span>
+              </div>
+            </div>
+
+            <div class="wb-section-heading" style="margin-top:10px;">ACTIVE COURT TRAIT:</div>
+            <div class="wb-trait-cards-row">
+              <div class="wb-trait-chip active">
+                <strong>⚡ Aggressive</strong>
+                <small>+10% Smash velocity, faster super flame recharge.</small>
+              </div>
+              <div class="wb-trait-chip">
+                <strong>🛡️ Defensive</strong>
+                <small>+15% Dive reach, increased stamina recovery rate.</small>
+              </div>
+              <div class="wb-trait-chip">
+                <strong>🌀 Spin Master</strong>
+                <small>+20% Curve deflection on high-spin slice shots.</small>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- =====================================================================
+         O. WEAPONS & RACKETS ARMORY MODAL (Nav button 3)
+         ===================================================================== -->
+    <div id="weapons-armory-modal" class="cyber-modal-backdrop hidden">
+      <div class="cyber-modal-card armory-modal-card">
+        <div class="cyber-modal-header">
+          <div class="modal-title-wrap">
+            <span class="modal-super">TACTICAL LOADOUTS</span>
+            <h3 class="modal-title">⚔️ WEAPONS &amp; RACKETS ARMORY</h3>
+          </div>
+          <button type="button" class="cyber-close-btn" data-close="weapons-armory-modal">✕</button>
+        </div>
+
+        <div class="armory-modal-body">
+          <div class="armory-grid">
+            <div class="armory-card equipped">
+              <div class="ac-top">
+                <span class="ac-badge gold">LEGENDARY</span>
+                <span class="ac-equipped-tag">EQUIPPED ✓</span>
+              </div>
+              <div class="ac-icon">🔥</div>
+              <h4 class="ac-title">Firestorm Dragon Blade</h4>
+              <p class="ac-sub">+18 km/h Smash · Blazing Flame Trail · Ignites Net</p>
+              <div class="ac-stats">
+                <span>Power: 96/100</span>
+                <span>Spin: 88/100</span>
+              </div>
+            </div>
+
+            <div class="armory-card">
+              <div class="ac-top">
+                <span class="ac-badge cyan">PLATINUM</span>
+                <button type="button" class="ac-equip-btn">EQUIP</button>
+              </div>
+              <div class="ac-icon">⚡</div>
+              <h4 class="ac-title">Neo-Lightning Racket</h4>
+              <p class="ac-sub">+22% Spin Control · Electric Impact Shockwave</p>
+              <div class="ac-stats">
+                <span>Power: 90/100</span>
+                <span>Spin: 98/100</span>
+              </div>
+            </div>
+
+            <div class="armory-card">
+              <div class="ac-top">
+                <span class="ac-badge purple">DIAMOND</span>
+                <button type="button" class="ac-equip-btn">EQUIP</button>
+              </div>
+              <div class="ac-icon">💎</div>
+              <h4 class="ac-title">Cosmic Aurora Strings</h4>
+              <p class="ac-sub">+15% Sweet Spot · Crystal Particle Aura</p>
+              <div class="ac-stats">
+                <span>Power: 92/100</span>
+                <span>Control: 95/100</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- =====================================================================
+         P. INVENTORY & GEAR MODAL (Nav button 4)
+         ===================================================================== -->
+    <div id="inventory-modal" class="cyber-modal-backdrop hidden">
+      <div class="cyber-modal-card inventory-modal-card">
+        <div class="cyber-modal-header">
+          <div class="modal-title-wrap">
+            <span class="modal-super">STORED ASSETS</span>
+            <h3 class="modal-title">🎒 INVENTORY &amp; GEAR</h3>
+          </div>
+          <button type="button" class="cyber-close-btn" data-close="inventory-modal">✕</button>
+        </div>
+
+        <div class="inventory-modal-body">
+          <div class="inventory-grid">
+            <div class="inv-card">
+              <div class="inv-icon">🪙</div>
+              <strong>Gold Token Stack</strong>
+              <small>500,732 Coins</small>
+            </div>
+            <div class="inv-card">
+              <div class="inv-icon">💎</div>
+              <strong>Cyber Gems</strong>
+              <small>6,000 Gems</small>
+            </div>
+            <div class="inv-card">
+              <div class="inv-icon">⚡</div>
+              <strong>Tournament Pass</strong>
+              <small>120 Stamina</small>
+            </div>
+            <div class="inv-card">
+              <div class="inv-icon">🎟️</div>
+              <strong>Season 1 Ticket</strong>
+              <small>Tier 24 Unlocked</small>
+            </div>
+            <div class="inv-card">
+              <div class="inv-icon">🔥</div>
+              <strong>Flame Booster x5</strong>
+              <small>Usable in Match</small>
+            </div>
+            <div class="inv-card">
+              <div class="inv-icon">👑</div>
+              <strong>Grand Ace Badge</strong>
+              <small>Cosmetic Emblem</small>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- =====================================================================
+         Q. CLAN MANAGEMENT & DISCOVERY MODAL (Nav button 8)
+         ===================================================================== -->
+    <div id="clan-modal" class="cyber-modal-backdrop hidden">
+      <div class="cyber-modal-card clan-modal-card">
+        <div class="cyber-modal-header">
+          <div class="modal-title-wrap">
+            <span class="modal-super">GUILDS &amp; CLANS</span>
+            <h3 class="modal-title">🛡️ SMASH CLUB CLAN HUB</h3>
+          </div>
+          <button type="button" class="cyber-close-btn" data-close="clan-modal">✕</button>
+        </div>
+
+        <div class="clan-modal-body">
+          <div class="clan-my-banner">
+            <div class="clan-crest">⚡</div>
+            <div class="clan-meta">
+              <span class="clan-tag">[RAZ]</span>
+              <h4 class="clan-name">Apex Thunder Aces</h4>
+              <span class="clan-stats">Rank #4 Global · 28/30 Members · Level 12</span>
+            </div>
+            <button type="button" class="clan-btn-chat">Clan Chat</button>
+          </div>
+
+          <div class="clan-roster-heading">ACTIVE CLAN MEMBERS:</div>
+          <div class="clan-members-list">
+            <div class="clan-member-row leader">
+              <span class="cm-rank">👑 LEADER</span>
+              <strong class="cm-name">Ammaar (You)</strong>
+              <span class="cm-rp">4,820 RP</span>
+              <span class="cm-status online">Online</span>
+            </div>
+            <div class="clan-member-row">
+              <span class="cm-rank">⭐ OFFICER</span>
+              <strong class="cm-name">Matt Titan</strong>
+              <span class="cm-rp">4,120 RP</span>
+              <span class="cm-status online">In Match</span>
+            </div>
+            <div class="clan-member-row">
+              <span class="cm-rank">⭐ OFFICER</span>
+              <strong class="cm-name">Sarah Blitz</strong>
+              <span class="cm-rp">3,890 RP</span>
+              <span class="cm-status offline">Away</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- =====================================================================
+         R. SEASON EVENTS MODAL (Nav button 6)
+         ===================================================================== -->
+    <div id="events-modal" class="cyber-modal-backdrop hidden">
+      <div class="cyber-modal-card events-modal-card">
+        <div class="cyber-modal-header">
+          <div class="modal-title-wrap">
+            <span class="modal-super">COMPETITIVE ROADMAP</span>
+            <h3 class="modal-title">🎟️ SEASON 1: CYBER ODYSSEY</h3>
+          </div>
+          <button type="button" class="cyber-close-btn" data-close="events-modal">✕</button>
+        </div>
+
+        <div class="events-modal-body">
+          <div class="event-banner-hero">
+            <div class="event-badge">ACTIVE UNTIL NOV 30</div>
+            <h3 class="event-title">THE NEON CHAMPIONSHIP</h3>
+            <p class="event-desc">Win 10 Ranked Matches in Season 1 to claim the exclusive Chromatic Firestorm Racket Aura!</p>
+            <div class="event-progress-wrap">
+              <div class="ep-track"><div class="ep-fill" style="width: 70%"></div></div>
+              <span class="ep-count">7 / 10 Wins Claimed</span>
+            </div>
+          </div>
+
+          <div class="events-cards-row">
+            <div class="ev-mini-card">
+              <strong>🔥 Double EXP Weekend</strong>
+              <small>+100% Experience on all 100+ Level stages</small>
+              <span class="ev-time">Active now</span>
+            </div>
+            <div class="ev-mini-card">
+              <strong>👥 2v2 Doubles Tourney</strong>
+              <small>Compete with friends for 100,000 Coins reward pool</small>
+              <span class="ev-time">Starts Tomorrow</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- =====================================================================
+         S. NOTIFICATIONS MODAL (Utility button)
+         ===================================================================== -->
+    <div id="notifications-modal" class="cyber-modal-backdrop hidden">
+      <div class="cyber-modal-card notif-modal-card">
+        <div class="cyber-modal-header">
+          <div class="modal-title-wrap">
+            <span class="modal-super">SYSTEM &amp; MATCH ALERTS</span>
+            <h3 class="modal-title">🔔 NOTIFICATIONS</h3>
+          </div>
+          <button type="button" class="cyber-close-btn" data-close="notifications-modal">✕</button>
+        </div>
+
+        <div class="notif-modal-body">
+          <div class="notif-item unread">
+            <span class="notif-icon">🏆</span>
+            <div class="notif-text">
+              <strong>Tournament Stage 42 Cleared!</strong>
+              <p>You earned 3 Stars and unlocked Cyber Metropolis Arena.</p>
+              <small>5 minutes ago</small>
+            </div>
+          </div>
+          <div class="notif-item">
+            <span class="notif-icon">👥</span>
+            <div class="notif-text">
+              <strong>Team Code Joined</strong>
+              <p>Player Sarah joined your 2v2 Doubles room.</p>
+              <small>1 hour ago</small>
+            </div>
+          </div>
+          <div class="notif-item">
+            <span class="notif-icon">⚙️</span>
+            <div class="notif-text">
+              <strong>RAzy Patch 1.4 Active</strong>
+              <p>Optimized edge-to-edge landscape canvas, new 15s instant replay buffer.</p>
+              <small>Today</small>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- =====================================================================
+         T. PRIVACY POLICY & TERMS OF SERVICE MODALS (Legal)
+         ===================================================================== -->
+    <div id="privacy-policy-modal" class="cyber-modal-backdrop hidden">
+      <div class="cyber-modal-card legal-modal-card">
+        <div class="cyber-modal-header">
+          <h3 class="modal-title">📜 RAZY PRIVACY POLICY</h3>
+          <button type="button" class="cyber-close-btn" data-close="privacy-policy-modal">✕</button>
+        </div>
+        <div class="legal-modal-body">
+          <p><strong>Last Updated: October 2026</strong></p>
+          <p>RAzy respects your privacy. This policy describes how we collect, protect, and handle your data:</p>
+          <h4>1. Information We Collect</h4>
+          <p>We store your unique username, permanent collision-resistant player UID, cosmetic preferences, and local match statistics. When authenticating with Google, we verify your identity token and store your email address securely.</p>
+          <h4>2. Data Security &amp; Storage</h4>
+          <p>Player credentials and tokens are verified server-side. Passwords are never requested or stored in plaintext. Session keys are encrypted and stored in secure sandbox storage.</p>
+          <h4>3. No Third-Party Selling</h4>
+          <p>We do not sell, rent, or share personal player data with advertisers or data brokers.</p>
+        </div>
+      </div>
+    </div>
+
+    <div id="terms-service-modal" class="cyber-modal-backdrop hidden">
+      <div class="cyber-modal-card legal-modal-card">
+        <div class="cyber-modal-header">
+          <h3 class="modal-title">📑 RAZY TERMS OF SERVICE</h3>
+          <button type="button" class="cyber-close-btn" data-close="terms-service-modal">✕</button>
+        </div>
+        <div class="legal-modal-body">
+          <p><strong>Effective: October 2026</strong></p>
+          <h4>1. Acceptance of Terms</h4>
+          <p>By accessing RAzy, you agree to comply with our community rules and fair play guidelines.</p>
+          <h4>2. Permanent Player UIDs &amp; Usernames</h4>
+          <p>Every account is assigned a permanent, unique, collision-resistant UID. Usernames must not infringe on trademarks, contain vulgarities, or impersonate other players.</p>
+          <h4>3. Fair Play &amp; Multiplayer</h4>
+          <p>Cheating, exploiting bugs, network manipulation, and harassment in team chat are strictly prohibited and will result in rank resets or account suspension.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- =====================================================================
+         U. DELETE ACCOUNT CONFIRMATION MODAL
+         ===================================================================== -->
+    <div id="delete-account-modal" class="cyber-modal-backdrop hidden">
+      <div class="cyber-modal-card delete-confirm-card">
+        <div class="cyber-modal-header">
+          <h3 class="modal-title text-red">⚠️ DELETE PLAYER ACCOUNT?</h3>
+          <button type="button" class="cyber-close-btn" data-close="delete-account-modal">✕</button>
+        </div>
+        <div class="delete-confirm-body">
+          <p>Are you sure you want to permanently delete your RAzy player account and associated credentials?</p>
+          <div class="del-warning-box">
+            <strong>Permanent Action:</strong>
+            <p>Your permanent UID, tournament stars, rankings, coins, and equipment will be wiped permanently and cannot be recovered.</p>
+          </div>
+          <div class="del-confirm-actions">
+            <button id="btn-cancel-delete-account" type="button" class="del-sub-btn">Cancel &amp; Keep Account</button>
+            <button id="btn-confirm-delete-account" type="button" class="del-danger-btn">Permanently Delete Account</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- =====================================================================
+         V. WORLD / LOBBY CHAT DRAWER MODAL
+         ===================================================================== -->
+    <div id="chat-modal" class="cyber-modal-backdrop hidden">
+      <div class="cyber-modal-card chat-drawer-card">
+        <div class="cyber-modal-header">
+          <div class="modal-title-wrap">
+            <span class="modal-super">GLOBAL CHANNELS</span>
+            <h3 class="modal-title">💬 WORLD &amp; LOBBY CHAT</h3>
+          </div>
+          <button type="button" class="cyber-close-btn" data-close="chat-modal">✕</button>
+        </div>
+        <div class="chat-drawer-body">
+          <div class="chat-messages-container" id="chat-messages-container">
+            <div class="chat-msg-row">
+              <span class="cm-time">10:14</span>
+              <span class="cm-author leader">[CLAN] Ammaar:</span>
+              <span class="cm-text">Who is down for 2v2 Doubles Championship?</span>
+            </div>
+            <div class="chat-msg-row">
+              <span class="cm-time">10:15</span>
+              <span class="cm-author">[GLOBAL] Matt:</span>
+              <span class="cm-text">I am online! Send room code.</span>
+            </div>
+            <div class="chat-msg-row">
+              <span class="cm-time">10:16</span>
+              <span class="cm-author leader">[CLAN] Ammaar:</span>
+              <span class="cm-text">Join RAZ-704! Match starts in 1 minute.</span>
+            </div>
+          </div>
+          <div class="chat-input-bar">
+            <input id="input-chat-message" type="text" maxlength="80" placeholder="Type a message to World…" />
+            <button id="btn-send-chat" type="button" class="chat-send-btn">Send ➔</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Toast Notification Container -->
+    <div id="razy-toast-container" class="razy-toast-container"></div>
+
+    <script type="module">
+      import { renderAllHudMiiAvatars } from "./src/mii_avatars.js";
+      import { SmashClubLobbyManager } from "./src/lobby_manager.js";
+
+      renderAllHudMiiAvatars();
+
+      // Ensure lobby is initialized once engine is ready
+      window.addEventListener("DOMContentLoaded", () => {
+        setTimeout(() => {
+          const engine = window.__argonTennis;
+          const hud = engine ? engine.hud : null;
+          window.__smashClubLobby = new SmashClubLobbyManager(engine, hud);
+        }, 100);
+      });
+    </script>
+    <script type="module" src="./src/game_engine.js"></script>
+  </body>
+</html>

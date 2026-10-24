@@ -1,0 +1,8 @@
+{
+  "name": "RAzy",
+  "description": "RAzy — Universal Game Launcher, UI/UX, Authentication & Landscape Game System with player profile, unique UIDs, game library, match preparation, and 3D arcade gameplay.",
+  "requestFramePermissions": [
+    "camera"
+  ],
+  "majorCapabilities": []
+}

@@ -1,0 +1,6 @@
+{
+  "summary":  "Implementation plan for Smash Club Tennis by Argon Studios. Covers mandatory landscape orientation enforcement, animated Argon Studios brand splash screen, landing screen, Google Auth & Guest login, comprehensive online/offline game lobby supporting 1v1, 1v2, and 2v2 matches with team codes, friend lists, and bot fill, plus doubles player positioning in the 3D court engine.",
+  "updatedAt":  "2026-10-21T16:11:06.978936087Z",
+  "requestFeedback":  true,
+  "userFacing":  true
+}
