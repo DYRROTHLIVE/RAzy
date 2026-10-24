@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-echo "=== RAzy Android Native APK & AAB Compilation Pipeline ==="
+echo "=== RAzy Android Native Standalone APK & AAB Compilation Pipeline ==="
 
 ANDROID_JAR="/opt/android-sdk/platforms/android-30/android.jar"
 R8_JAR="/opt/android-sdk/r8.jar"
@@ -13,6 +13,9 @@ KEY_PASS="razy123"
 PUBLIC_DOWNLOADS="/app/applet/public/downloads"
 mkdir -p "$PUBLIC_DOWNLOADS"
 
+echo ">> 0. Ensuring latest production web build..."
+npm run build
+
 WORK_DIR="/tmp/razy-android-build"
 rm -rf "$WORK_DIR"
 mkdir -p "$WORK_DIR/src/com/razy/launcher"
@@ -23,17 +26,23 @@ mkdir -p "$WORK_DIR/res/mipmap-hdpi"
 mkdir -p "$WORK_DIR/res/mipmap-xhdpi"
 mkdir -p "$WORK_DIR/res/mipmap-xxhdpi"
 mkdir -p "$WORK_DIR/res/mipmap-xxxhdpi"
-mkdir -p "$WORK_DIR/assets"
+mkdir -p "$WORK_DIR/assets/www"
 mkdir -p "$WORK_DIR/bin"
 mkdir -p "$WORK_DIR/dex"
 
-echo ">> 1. Creating AndroidManifest.xml..."
+echo ">> 1. Copying complete production web assets into APK assets/www (Zero AI Studio Branding, Offline Native)..."
+cp -r /app/applet/dist/* "$WORK_DIR/assets/www/"
+# Remove nested downloads and user screenshot assets from APK to keep size lean
+rm -rf "$WORK_DIR/assets/www/downloads"
+rm -rf "$WORK_DIR/assets/www/assets/aistudio"
+
+echo ">> 2. Creating AndroidManifest.xml..."
 cat << 'EOF' > "$WORK_DIR/AndroidManifest.xml"
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.razy.launcher"
-    android:versionCode="10001"
-    android:versionName="1.0.1">
+    android:versionCode="10002"
+    android:versionName="1.0.2">
 
     <uses-sdk
         android:minSdkVersion="23"
@@ -84,7 +93,7 @@ cat << 'EOF' > "$WORK_DIR/AndroidManifest.xml"
 </manifest>
 EOF
 
-echo ">> 2. Generating Android Resources & Icons..."
+echo ">> 3. Generating Android Resources & Icons..."
 cat << 'EOF' > "$WORK_DIR/res/values/strings.xml"
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
@@ -111,105 +120,191 @@ cp /app/applet/public/icons/icon-192.png "$WORK_DIR/res/mipmap-xhdpi/ic_launcher
 cp /app/applet/public/icons/icon-512.png "$WORK_DIR/res/mipmap-xxhdpi/ic_launcher.png"
 cp /app/applet/public/icons/icon-512.png "$WORK_DIR/res/mipmap-xxxhdpi/ic_launcher.png"
 
-echo ">> 3. Creating Offline Fallback HTML inside assets..."
-cat << 'EOF' > "$WORK_DIR/assets/offline.html"
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>RAzy Launcher — Offline</title>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      background: #020617;
-      color: #f8fafc;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      height: 100vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      text-align: center;
-      padding: 24px;
-      overflow: hidden;
+echo ">> 4. Generating LocalAssetServer.java (Eliminates AI Studio proxy and 403 errors)..."
+cat << 'EOF' > "$WORK_DIR/src/com/razy/launcher/LocalAssetServer.java"
+package com.razy.launcher;
+
+import android.content.res.AssetManager;
+import java.io.ByteArrayOutputStream;
+import java.io.FileNotFoundException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.InetAddress;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.net.URLDecoder;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+public class LocalAssetServer {
+    private final AssetManager assetManager;
+    private ServerSocket serverSocket;
+    private final ExecutorService executor = Executors.newCachedThreadPool();
+    private volatile boolean isRunning = false;
+    private int port = 8765;
+
+    public LocalAssetServer(AssetManager assetManager) {
+        this.assetManager = assetManager;
     }
-    .card {
-      background: rgba(15, 23, 42, 0.85);
-      border: 1px solid rgba(56, 189, 248, 0.3);
-      box-shadow: 0 0 40px rgba(56, 189, 248, 0.15);
-      border-radius: 20px;
-      padding: 32px 40px;
-      max-width: 500px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 16px;
+
+    public int start() {
+        try {
+            try {
+                serverSocket = new ServerSocket(port, 50, InetAddress.getByName("127.0.0.1"));
+            } catch (Exception e) {
+                serverSocket = new ServerSocket(0, 50, InetAddress.getByName("127.0.0.1"));
+            }
+            this.port = serverSocket.getLocalPort();
+            this.isRunning = true;
+
+            new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    while (isRunning) {
+                        try {
+                            Socket client = serverSocket.accept();
+                            executor.submit(new ClientHandler(client));
+                        } catch (Exception e) {
+                            if (!isRunning) break;
+                        }
+                    }
+                }
+            }, "RAzy-AssetServer").start();
+
+            return this.port;
+        } catch (Exception e) {
+            e.printStackTrace();
+            return -1;
+        }
     }
-    .badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 6px 14px;
-      border-radius: 999px;
-      background: rgba(56, 189, 248, 0.15);
-      color: #38bdf8;
-      font-size: 12px;
-      font-weight: 700;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
+
+    public void stop() {
+        isRunning = false;
+        try {
+            if (serverSocket != null) {
+                serverSocket.close();
+            }
+        } catch (Exception ignored) {}
+        executor.shutdownNow();
     }
-    h1 {
-      font-size: 24px;
-      font-weight: 900;
-      letter-spacing: -0.02em;
-      background: linear-gradient(135deg, #ffffff 40%, #38bdf8 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
+
+    private class ClientHandler implements Runnable {
+        private final Socket socket;
+
+        ClientHandler(Socket socket) {
+            this.socket = socket;
+        }
+
+        @Override
+        public void run() {
+            try {
+                InputStream in = socket.getInputStream();
+                OutputStream out = socket.getOutputStream();
+
+                ByteArrayOutputStream headerBuf = new ByteArrayOutputStream();
+                int b;
+                while ((b = in.read()) != -1) {
+                    headerBuf.write(b);
+                    if (b == '\n') break;
+                }
+                String requestLine = new String(headerBuf.toByteArray(), "UTF-8").trim();
+                if (requestLine.isEmpty()) {
+                    socket.close();
+                    return;
+                }
+
+                String[] parts = requestLine.split("\\s+");
+                if (parts.length < 2) {
+                    socket.close();
+                    return;
+                }
+
+                String rawPath = parts[1];
+                int qIdx = rawPath.indexOf('?');
+                if (qIdx != -1) rawPath = rawPath.substring(0, qIdx);
+                int hIdx = rawPath.indexOf('#');
+                if (hIdx != -1) rawPath = rawPath.substring(0, hIdx);
+
+                String path = URLDecoder.decode(rawPath, "UTF-8");
+                if (path.startsWith("/")) path = path.substring(1);
+                if (path.isEmpty()) path = "index.html";
+
+                path = path.replace("\\", "/");
+                while (path.contains("../")) path = path.replace("../", "");
+
+                InputStream assetStream = null;
+                try {
+                    assetStream = assetManager.open("www/" + path);
+                } catch (FileNotFoundException fnf) {
+                    if (!path.contains(".")) {
+                        try {
+                            assetStream = assetManager.open("www/index.html");
+                            path = "index.html";
+                        } catch (Exception ignored) {}
+                    }
+                }
+
+                if (assetStream == null) {
+                    String notFound = "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                    out.write(notFound.getBytes("UTF-8"));
+                    out.flush();
+                    socket.close();
+                    return;
+                }
+
+                ByteArrayOutputStream dataBuf = new ByteArrayOutputStream();
+                byte[] buffer = new byte[16384];
+                int read;
+                while ((read = assetStream.read(buffer)) != -1) {
+                    dataBuf.write(buffer, 0, read);
+                }
+                assetStream.close();
+                byte[] data = dataBuf.toByteArray();
+
+                String mime = getMimeType(path);
+                String headers = "HTTP/1.1 200 OK\r\n" +
+                        "Content-Type: " + mime + "\r\n" +
+                        "Content-Length: " + data.length + "\r\n" +
+                        "Access-Control-Allow-Origin: *\r\n" +
+                        "Cache-Control: public, max-age=3600\r\n" +
+                        "Connection: close\r\n\r\n";
+
+                out.write(headers.getBytes("UTF-8"));
+                out.write(data);
+                out.flush();
+                socket.close();
+            } catch (Exception ignored) {
+                try { socket.close(); } catch (Exception ignored2) {}
+            }
+        }
+
+        private String getMimeType(String path) {
+            String lower = path.toLowerCase();
+            if (lower.endsWith(".html")) return "text/html; charset=utf-8";
+            if (lower.endsWith(".js") || lower.endsWith(".mjs")) return "application/javascript; charset=utf-8";
+            if (lower.endsWith(".css")) return "text/css; charset=utf-8";
+            if (lower.endsWith(".json")) return "application/json; charset=utf-8";
+            if (lower.endsWith(".png")) return "image/png";
+            if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
+            if (lower.endsWith(".webp")) return "image/webp";
+            if (lower.endsWith(".svg")) return "image/svg+xml";
+            if (lower.endsWith(".ico")) return "image/x-icon";
+            if (lower.endsWith(".mp3")) return "audio/mpeg";
+            if (lower.endsWith(".wav")) return "audio/wav";
+            if (lower.endsWith(".ogg")) return "audio/ogg";
+            if (lower.endsWith(".glb")) return "model/gltf-binary";
+            if (lower.endsWith(".gltf")) return "model/gltf+json";
+            if (lower.endsWith(".bin")) return "application/octet-stream";
+            if (lower.endsWith(".woff2")) return "font/woff2";
+            if (lower.endsWith(".woff")) return "font/woff";
+            if (lower.endsWith(".ttf")) return "font/ttf";
+            return "application/octet-stream";
+        }
     }
-    p {
-      font-size: 14px;
-      color: #94a3b8;
-      line-height: 1.5;
-    }
-    .btn {
-      margin-top: 8px;
-      padding: 12px 28px;
-      border-radius: 12px;
-      background: linear-gradient(135deg, #38bdf8 0%, #0284c7 100%);
-      color: #ffffff;
-      font-size: 14px;
-      font-weight: 800;
-      border: none;
-      cursor: pointer;
-      box-shadow: 0 4px 16px rgba(56, 189, 248, 0.35);
-      transition: transform 0.1s, opacity 0.1s;
-    }
-    .btn:active { transform: scale(0.97); }
-  </style>
-</head>
-<body>
-  <div class="card">
-    <div class="badge">📡 RAzy Standalone Android App</div>
-    <h1>Connection Needed</h1>
-    <p>RAzy requires an active internet connection to stream match servers and player data. Check your Wi-Fi or mobile data.</p>
-    <button class="btn" onclick="window.location.reload()">🔄 Reconnect Now</button>
-  </div>
-  <script>
-    window.addEventListener('online', () => {
-      window.location.reload();
-    });
-    setInterval(() => {
-      if (navigator.onLine) {
-        window.location.reload();
-      }
-    }, 4000);
-  </script>
-</body>
-</html>
+}
 EOF
 
-echo ">> 4. Generating MainActivity.java..."
+echo ">> 5. Generating MainActivity.java..."
 cat << 'EOF' > "$WORK_DIR/src/com/razy/launcher/MainActivity.java"
 package com.razy.launcher;
 
@@ -227,25 +322,22 @@ import android.view.WindowManager;
 import android.webkit.ConsoleMessage;
 import android.webkit.PermissionRequest;
 import android.webkit.WebChromeClient;
-import android.webkit.WebResourceError;
-import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
 
 public class MainActivity extends Activity {
-    private static final String DEFAULT_URL = "https://ais-dev-sbkrktmyq7bi2fnwsmm4ie-176475984521.asia-east1.run.app/";
-    private static final String OFFLINE_FALLBACK = "file:///android_asset/offline.html";
-
+    private LocalAssetServer mServer;
     private WebView mWebView;
     private FrameLayout mContainer;
+    private int mPort = -1;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // 1. Force Landscape & Fullscreen Immersive Window
+        // 1. Force Fullscreen Landscape Mode
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
 
@@ -259,7 +351,11 @@ public class MainActivity extends Activity {
         mContainer.setBackgroundColor(Color.BLACK);
         setContentView(mContainer);
 
-        // 2. Initialize Hardware Accelerated WebView
+        // 2. Start Embedded Local Asset Server (No AI Studio branding, No 403 errors, 100% offline)
+        mServer = new LocalAssetServer(getAssets());
+        mPort = mServer.start();
+
+        // 3. Initialize WebView
         mWebView = new WebView(this);
         mWebView.setLayoutParams(new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
@@ -271,13 +367,14 @@ public class MainActivity extends Activity {
         configureWebClients(mWebView);
 
         mContainer.addView(mWebView);
-
-        // 3. Apply Immersive Sticky UI
         applyImmersiveMode();
 
-        // 4. Resolve Target URL
-        String targetUrl = resolveTargetUrl(getIntent());
-        mWebView.loadUrl(targetUrl);
+        // 4. Load from Local Server or direct asset fallback
+        if (mPort > 0) {
+            mWebView.loadUrl("http://127.0.0.1:" + mPort + "/index.html");
+        } else {
+            mWebView.loadUrl("file:///android_asset/www/index.html");
+        }
     }
 
     private void configureWebSettings(WebSettings settings) {
@@ -286,6 +383,8 @@ public class MainActivity extends Activity {
         settings.setDatabaseEnabled(true);
         settings.setAllowFileAccess(true);
         settings.setAllowContentAccess(true);
+        settings.setAllowFileAccessFromFileURLs(true);
+        settings.setAllowUniversalAccessFromFileURLs(true);
         settings.setMediaPlaybackRequiresUserGesture(false);
         settings.setUseWideViewPort(true);
         settings.setLoadWithOverviewMode(true);
@@ -303,7 +402,6 @@ public class MainActivity extends Activity {
         webView.setWebChromeClient(new WebChromeClient() {
             @Override
             public void onPermissionRequest(final PermissionRequest request) {
-                // Automatically grant required media permissions (audio, video, etc.)
                 runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
@@ -321,7 +419,7 @@ public class MainActivity extends Activity {
         webView.setWebViewClient(new WebViewClient() {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, String url) {
-                if (url != null && (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("file:///"))) {
+                if (url != null && (url.startsWith("http://127.0.0.1") || url.startsWith("file:///"))) {
                     return false;
                 }
                 try {
@@ -329,30 +427,6 @@ public class MainActivity extends Activity {
                     startActivity(intent);
                 } catch (Exception ignored) {}
                 return true;
-            }
-
-            @Override
-            public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                    return shouldOverrideUrlLoading(view, request.getUrl().toString());
-                }
-                return false;
-            }
-
-            @Override
-            public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                    if (request.isForMainFrame()) {
-                        view.loadUrl(OFFLINE_FALLBACK);
-                    }
-                }
-            }
-
-            @Override
-            public void onReceivedError(WebView view, int errorCode, String description, String failingUrl) {
-                if (errorCode == ERROR_HOST_LOOKUP || errorCode == ERROR_CONNECT || errorCode == ERROR_TIMEOUT) {
-                    view.loadUrl(OFFLINE_FALLBACK);
-                }
             }
         });
     }
@@ -373,25 +447,6 @@ public class MainActivity extends Activity {
         super.onWindowFocusChanged(hasFocus);
         if (hasFocus) {
             applyImmersiveMode();
-        }
-    }
-
-    private String resolveTargetUrl(Intent intent) {
-        if (intent != null && intent.getData() != null) {
-            String uriStr = intent.getData().toString();
-            if (uriStr.startsWith("http://") || uriStr.startsWith("https://")) {
-                return uriStr;
-            }
-        }
-        return DEFAULT_URL;
-    }
-
-    @Override
-    protected void onNewIntent(Intent intent) {
-        super.onNewIntent(intent);
-        if (mWebView != null) {
-            String url = resolveTargetUrl(intent);
-            mWebView.loadUrl(url);
         }
     }
 
@@ -425,6 +480,9 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        if (mServer != null) {
+            mServer.stop();
+        }
         if (mWebView != null) {
             mWebView.destroy();
         }
@@ -433,13 +491,14 @@ public class MainActivity extends Activity {
 }
 EOF
 
-echo ">> 5. Compiling Java Source..."
+echo ">> 6. Compiling Java Sources..."
 javac -encoding UTF-8 \
       -cp "$ANDROID_JAR" \
       -d "$WORK_DIR/bin" \
+      "$WORK_DIR/src/com/razy/launcher/LocalAssetServer.java" \
       "$WORK_DIR/src/com/razy/launcher/MainActivity.java"
 
-echo ">> 6. Running D8 to create classes.dex..."
+echo ">> 7. Running D8 to create classes.dex..."
 CLASS_FILES=$(find "$WORK_DIR/bin" -name "*.class")
 java -cp "$R8_JAR" com.android.tools.r8.D8 \
      --lib "$ANDROID_JAR" \
@@ -449,7 +508,7 @@ java -cp "$R8_JAR" com.android.tools.r8.D8 \
 
 test -f "$WORK_DIR/dex/classes.dex" || { echo "D8 dexing failed!"; exit 1; }
 
-echo ">> 7. Packaging APK Resources with AAPT..."
+echo ">> 8. Packaging APK Resources with AAPT..."
 aapt package -f -m \
      -J "$WORK_DIR/src" \
      -M "$WORK_DIR/AndroidManifest.xml" \
@@ -458,15 +517,15 @@ aapt package -f -m \
      -I "$ANDROID_JAR" \
      -F "$WORK_DIR/unaligned.apk"
 
-echo ">> 8. Adding classes.dex to APK..."
+echo ">> 9. Adding classes.dex to APK..."
 cd "$WORK_DIR/dex"
 zip -u "$WORK_DIR/unaligned.apk" classes.dex
 cd - > /dev/null
 
-echo ">> 9. Aligning APK with zipalign..."
+echo ">> 10. Aligning APK with zipalign..."
 zipalign -f -p 4 "$WORK_DIR/unaligned.apk" "$WORK_DIR/aligned.apk"
 
-echo ">> 10. Signing APK with apksigner (v1, v2, v3)..."
+echo ">> 11. Signing APK with apksigner (v1, v2, v3)..."
 apksigner sign \
      --ks "$KEYSTORE" \
      --ks-pass "pass:$KEY_PASS" \
@@ -474,15 +533,13 @@ apksigner sign \
      --out "$PUBLIC_DOWNLOADS/razy-launcher.apk" \
      "$WORK_DIR/aligned.apk"
 
-echo ">> 11. Verifying APK signature..."
+echo ">> 12. Verifying APK signature..."
 apksigner verify -v "$PUBLIC_DOWNLOADS/razy-launcher.apk"
 
-echo ">> 12. Compiling AAB (Android App Bundle)..."
-# Compile resources to flat files
+echo ">> 13. Compiling AAB (Android App Bundle)..."
 mkdir -p "$WORK_DIR/compiled_res"
 aapt2 compile --dir "$WORK_DIR/res" -o "$WORK_DIR/compiled_res/res.zip"
 
-# Link with proto format for AAB
 aapt2 link --proto-format \
       -o "$WORK_DIR/base_proto.apk" \
       -I "$ANDROID_JAR" \
@@ -490,7 +547,6 @@ aapt2 link --proto-format \
       "$WORK_DIR/compiled_res/res.zip" \
       --auto-add-overlay
 
-# Assemble base module directory structure for bundletool
 mkdir -p "$WORK_DIR/bundle_module/manifest"
 mkdir -p "$WORK_DIR/bundle_module/dex"
 mkdir -p "$WORK_DIR/bundle_module/res"
@@ -512,12 +568,12 @@ cd "$WORK_DIR/bundle_module"
 zip -q -r "$WORK_DIR/base.zip" *
 cd - > /dev/null
 
-echo ">> 13. Building AAB with Bundletool..."
+echo ">> 14. Building AAB with Bundletool..."
 java -jar "$BUNDLETOOL_JAR" build-bundle \
      --modules="$WORK_DIR/base.zip" \
      --output="$WORK_DIR/razy-launcher-unsigned.aab"
 
-echo ">> 14. Signing AAB with jarsigner..."
+echo ">> 15. Signing AAB with jarsigner..."
 jarsigner -keystore "$KEYSTORE" \
           -storepass "$KEY_PASS" \
           "$WORK_DIR/razy-launcher-unsigned.aab" \
@@ -525,8 +581,8 @@ jarsigner -keystore "$KEYSTORE" \
 
 mv "$WORK_DIR/razy-launcher-unsigned.aab" "$PUBLIC_DOWNLOADS/razy-launcher.aab"
 
-echo ">> 15. Validating AAB bundle..."
+echo ">> 16. Validating AAB bundle..."
 java -jar "$BUNDLETOOL_JAR" validate --bundle="$PUBLIC_DOWNLOADS/razy-launcher.aab"
 
-echo "=== BUILD SUCCESSFUL ==="
+echo "=== STANDALONE ANDROID BUILD SUCCESSFUL ==="
 ls -lh "$PUBLIC_DOWNLOADS/razy-launcher.apk" "$PUBLIC_DOWNLOADS/razy-launcher.aab"
