@@ -1,0 +1,62 @@
+name: Build and Release RAzy Android APK & AAB
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci || npm install
+
+      - name: Install Android build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y aapt aapt2 zipalign apksigner
+
+      - name: Build Web Application
+        run: npm run build
+
+      - name: Compile & Sign Android APK & AAB
+        run: |
+          chmod +x scripts/build-android.sh
+          bash scripts/build-android.sh
+
+      - name: Create GitHub Release and Upload APK/AAB
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: |
+            public/downloads/razy-launcher.apk
+            public/downloads/razy-launcher.aab
+          name: RAzy Android Release ${{ github.ref_name }}
+          body: |
+            ## 🎮 RAzy Universal Game Launcher (${{ github.ref_name }})
+            
+            - **`razy-launcher.apk`**: Standalone signed Android APK with embedded local offline engine and full hardware acceleration.
+            - **`razy-launcher.aab`**: Google Play Store Android App Bundle.
+          draft: false
+          prerelease: false
